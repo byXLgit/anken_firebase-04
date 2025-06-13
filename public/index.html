@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>デザイン案件管理</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+
+    <!-- Firebase Configuration -->
+    <script>
+        // Your web app's Firebase configuration
+        window.__firebase_config = {
+            apiKey: "AIzaSyBdbFkLqZBR1CO19x8Yzg4pawHVLLU2tjc",
+            authDomain: "anken-a8356.firebaseapp.com",
+            projectId: "anken-a8356",
+            storageBucket: "anken-a8356.appspot.com",
+            messagingSenderId: "155768573876",
+            appId: "1:155768573876:web:a997b7fb3862f9f7a4ace1",
+            measurementId: "G-577GXK07SD"
+        };
+        // Canvas環境で提供されるアプリIDを使用する (もし提供されていない場合は、上記firebaseConfigのappIdを使用)
+        window.__app_id = typeof __app_id !== 'undefined' ? __app_id : window.__firebase_config.appId;
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import {
+            getAuth,
+            onAuthStateChanged,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+
+        // window.firebase オブジェクトにFirebaseモジュールを公開
+        window.firebase = {
+            initializeApp,
+            getApps,
+            getApp,
+            getAuth,
+            onAuthStateChanged,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signOut,
+            getFirestore,
+            collection,
+            addDoc,
+            onSnapshot,
+            query,
+            serverTimestamp,
+            doc,
+            updateDoc,
+            arrayUnion,
+            getAnalytics
+        };
+    </script>
+
+    <!-- React and ReactDOM from CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+
+    <!-- React Application Script -->
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef, useMemo } = React;
+
+        // --- Child Components (No changes needed) ---
+        const TimelineBar = ({ startDate, dueDate, status, events = [] }) => {
+          if (!startDate || !dueDate) {
+            return <div className="text-gray-500 text-xs">日付未設定</div>;
+          }
+
+          const start = new Date(startDate);
+          const end = new Date(dueDate);
+          const today = new Date();
+
+          start.setHours(0, 0, 0, 0);
+          end.setHours(0, 0, 0, 0);
+          today.setHours(0, 0, 0, 0);
+
+          const totalDurationMs = end.getTime() - start.getTime();
+
+          const [activeTooltipIndex, setActiveTooltipIndex] = useState(null);
+          const [showStartTooltip, setShowStartTooltip] = useState(false);
+          const [showEndTooltip, setShowEndTooltip] = useState(false);
+
+          const getEventTypeColor = (event) => {
+            if (event.completed) {
+              return 'bg-green-500';
+            }
+            switch (event.type) {
+              case '予定': return 'bg-yellow-500';
+              case '提出': return 'bg-yellow-500';
+              case 'タスク': return 'bg-red-500';
+              case '完了': return 'bg-green-500';
+              default: return 'bg-purple-600';
+            }
+          };
+
+          const eventMarkers = events
+            .map((event) => {
+              const eventDate = new Date(event.date);
+              eventDate.setHours(0, 0, 0, 0);
+              const eventOffsetMs = eventDate.getTime() - start.getTime();
+              let position = 0;
+              if (totalDurationMs > 0) {
+                position = (eventOffsetMs / totalDurationMs) * 100;
+              }
+              return {
+                ...event,
+                position: Math.max(0, Math.min(100, position))
+              };
+            })
+            .sort((a, b) => a.position - b.position); // 位置でソート
+
+          let progressPercentage = 0;
+          if (totalDurationMs > 0) {
+            const elapsedMs = today.getTime() - start.getTime();
+            progressPercentage = (elapsedMs / totalDurationMs) * 100;
+            if (progressPercentage < 0) progressPercentage = 0;
+            if (progressPercentage > 100) progressPercentage = 100;
+          }
+
+          const barColorClass = 'bg-gray-700';
+          const progressColorClass = status === '完了' ? 'bg-blue-500' : 'bg-green-500';
+
+          const todayMarkerPosition = (today.getTime() - start.getTime()) / totalDurationMs * 100;
+          let clampedTodayMarkerPosition = Math.max(0, Math.min(100, todayMarkerPosition));
+
+          return (
+            <div className="relative w-full h-8 rounded-lg my-1">
+              <div
+                className={`absolute top-1/2 -translate-y-1/2 left-0 h-0.5 ${barColorClass} w-full rounded-lg`}
+              ></div>
+
+              {status !== '完了' && (
+                <div
+                  className={`absolute top-1/2 -translate-y-1/2 left-0 h-0.5 ${progressColorClass} transition-all duration-500 ease-out rounded-lg`}
+                  style={{ width: `${progressPercentage}%` }}
+                ></div>
+              )}
+
+              <div
+                className="absolute bottom-full mb-1 h-0 w-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-black z-10"
+                style={{ left: `${clampedTodayMarkerPosition}%`, transform: 'translateX(-50%)' }}
+                title="今日"
+              ></div>
+
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 z-20 cursor-pointer"
+                style={{ left: `0%`, transform: 'translateX(-50%)' }}
+                onMouseEnter={() => setShowStartTooltip(true)}
+                onMouseLeave={() => setShowStartTooltip(false)}
+              >
+                <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-4 bg-gray-800 -top-2"></div>
+                <div className="absolute left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-gray-800 -top-4"></div>
+                {showStartTooltip && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap z-30">
+                    <p>開始日: {startDate}</p>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-4 border-b-gray-800"></div>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 z-20 cursor-pointer"
+                style={{ left: `100%`, transform: 'translateX(-50%)' }}
+                onMouseEnter={() => setShowEndTooltip(true)}
+                onMouseLeave={() => setShowEndTooltip(false)}
+              >
+                <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-4 bg-gray-800 -top-2"></div>
+                <div className="absolute left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-gray-800 -top-4"></div>
+                {showEndTooltip && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap z-30">
+                    <p>完了予定日: {dueDate}</p>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-4 border-b-gray-800"></div>
+                  </div>
+                )}
+              </div>
+
+              {eventMarkers.map((event, index) => (
+                <div
+                  key={index}
+                  className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 z-20 cursor-pointer ${getEventTypeColor(event)} ${event.type === 'タスク' ? '' : 'rounded-full'}`}
+                  style={{ left: `${event.position}%` }}
+                  onMouseEnter={() => setActiveTooltipIndex(index)}
+                  onMouseLeave={() => setActiveTooltipIndex(null)}
+                  onClick={() => setActiveTooltipIndex(activeTooltipIndex === index ? null : index)}
+                >
+                  {activeTooltipIndex === index && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap z-30">
+                      <p>{event.date}</p>
+                      <p>{event.description}</p>
+                      {event.pdfUrl && (
+                        <p className="text-xs text-gray-400">
+                          PDF: <a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">表示</a>
+                        </p>
+                      )}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-gray-800"></div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        };
+        const VerticalCaseTimeline = ({ caseItem, displayStartDate, displayEndDate, heightPerDay, openEditModal, onCaseHover }) => {
+          const caseStartDate = new Date(caseItem.startDate);
+          const caseDueDate = new Date(caseItem.dueDate);
+
+          const effectiveStartDate = new Date(Math.max(caseStartDate.getTime(), displayStartDate.getTime()));
+          const effectiveDueDate = new Date(Math.min(caseDueDate.getTime(), displayEndDate.getTime()));
+
+          const startOffsetDays = (effectiveStartDate.getTime() - displayStartDate.getTime()) / (1000 * 60 * 60 * 24);
+          const topPx = Math.max(0, startOffsetDays * heightPerDay);
+
+          const durationDays = (effectiveDueDate.getTime() - effectiveStartDate.getTime()) / (1000 * 60 * 60 * 24) + 1;
+          const heightPx = Math.max(0, durationDays * heightPerDay);
+
+          if (heightPx <= 0) return null;
+
+          const sortedEvents = [...(caseItem.events || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          const getEventTypeShapeClass = (event) => {
+            switch (event.type) {
+              case 'タスク': return '';
+              default: return 'rounded-full';
+            }
+          };
+
+          const getEventColorClass = (event) => {
+            if (event.completed) {
+              return 'bg-green-500';
+            }
+            switch (event.type) {
+              case '予定': return 'bg-yellow-500';
+              case '提出': return 'bg-yellow-500';
+              case 'タスク': return 'bg-red-500';
+              case '完了': return 'bg-green-500';
+              default: return 'bg-purple-600';
+            }
+          };
+
+          const [activeTooltipIndex, setActiveTooltipIndex] = useState(null);
+
+          return (
+            <div
+              className="absolute w-0.5 bg-gray-800 flex flex-col items-center cursor-pointer"
+              style={{ top: `${topPx}px`, height: `${heightPx}px`, /* Horizontal positioning will be handled by parent */ }}
+              onClick={() => openEditModal(caseItem)}
+              onMouseEnter={() => onCaseHover(caseItem)}
+              onMouseLeave={() => onCaseHover(null)}
+            >
+              <div
+                className="absolute w-3 h-3 bg-black rounded-full z-20"
+                style={{ top: '0px', transform: 'translateY(-50%) translateX(-50%)', left: '50%' }}
+              ></div>
+
+              <div
+                className="absolute w-3 h-3 bg-black rounded-full z-20"
+                style={{ bottom: '0px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}
+              ></div>
+
+              {sortedEvents.map((event, eventIdx) => {
+                const eventDate = new Date(event.date);
+                const eventOffsetDays = (eventDate.getTime() - effectiveStartDate.getTime()) / (1000 * 60 * 60 * 24);
+                const eventTopPx = eventOffsetDays * heightPerDay;
+
+                if (eventTopPx < 0 || eventTopPx > heightPx) return null;
+
+                return (
+                  <div
+                    key={eventIdx}
+                    className={`absolute w-3 h-3 z-20 cursor-pointer ${getEventColorClass(event)} ${getEventTypeShapeClass(event)}`}
+                    style={{ top: `${eventTopPx}px`, left: '50%', transform: 'translateX(-50%) translateY(-50%)' }}
+                    onMouseEnter={() => setActiveTooltipIndex(eventIdx)}
+                    onMouseLeave={() => setActiveTooltipIndex(null)}
+                  >
+                    {activeTooltipIndex === eventIdx && (
+                      <div className="absolute left-1/2 -translate-x-1/2 mt-2 p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap z-30" style={{ top: '100%' }}>
+                        <p>{event.date}</p>
+                        <p>{event.description}</p>
+                        {event.pdfUrl && (
+                          <p className="text-xs text-gray-400">
+                            PDF: <a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">表示</a>
+                          </p>
+                        )}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-4 border-b-gray-800"></div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        };
+        const ListCalendarView = ({ cases, openEditModal }) => {
+          const scrollContainerRef = useRef(null);
+          const heightPerDay = 20;
+          const [loadedDaysBefore, setLoadedDaysBefore] = useState(15);
+          const [loadedDaysAfter, setLoadedDaysAfter] = useState(15);
+          const loadIncrement = 30;
+          const [hoveredCaseInfo, setHoveredCaseInfo] = useState(null);
+
+          const today = useMemo(() => {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            return d;
+          }, []);
+
+          const displayStartDate = useMemo(() => {
+            const d = new Date(today);
+            d.setDate(today.getDate() - loadedDaysBefore);
+            return d;
+          }, [today, loadedDaysBefore]);
+
+          const displayEndDate = useMemo(() => {
+            const d = new Date(today);
+            d.setDate(today.getDate() + loadedDaysAfter);
+            return d;
+          }, [today, loadedDaysAfter]);
+
+          const datesToDisplay = useMemo(() => {
+            const dates = [];
+            let loopDate = new Date(displayStartDate);
+            while (loopDate <= displayEndDate) {
+              dates.push(new Date(loopDate));
+              loopDate.setDate(loopDate.getDate() + 1);
+            }
+            return dates;
+          }, [displayStartDate, displayEndDate]);
+
+          const totalContentHeight = datesToDisplay.length * heightPerDay;
+
+          const firstViewDays = 31;
+          const firstViewHeight = firstViewDays * heightPerDay;
+
+          useEffect(() => {
+            if (scrollContainerRef.current) {
+              const todayIndex = datesToDisplay.findIndex(date => date.toDateString() === today.toDateString());
+              if (todayIndex !== -1) {
+                const scrollToY = (todayIndex * heightPerDay) - (scrollContainerRef.current.clientHeight / 2) + (heightPerDay / 2);
+                scrollContainerRef.current.scrollTop = Math.max(0, scrollToY);
+              }
+            }
+          }, [datesToDisplay, today, heightPerDay, firstViewHeight]);
+
+          const handleScroll = useCallback(() => {
+            const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+            const scrollThreshold = 50;
+
+            if (scrollTop < scrollThreshold) {
+              const oldScrollHeight = scrollHeight;
+              setLoadedDaysBefore(prev => prev + loadIncrement);
+              requestAnimationFrame(() => {
+                if (scrollContainerRef.current) {
+                  scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - oldScrollHeight;
+                }
+              });
+            }
+
+            if (scrollTop + clientHeight > scrollHeight - scrollThreshold) {
+              setLoadedDaysAfter(prev => prev + loadIncrement);
+            }
+          }, [loadIncrement]);
+
+          useEffect(() => {
+            const currentRef = scrollContainerRef.current;
+            if (currentRef) {
+              currentRef.addEventListener('scroll', handleScroll);
+            }
+            return () => {
+              if (currentRef) {
+                currentRef.removeEventListener('scroll', handleScroll);
+              }
+            };
+          }, [handleScroll]);
+
+          const visibleCases = cases.filter(caseItem =>
+            caseItem.startDate && caseItem.dueDate &&
+            new Date(caseItem.dueDate) >= displayStartDate &&
+            new Date(caseItem.startDate) <= displayEndDate &&
+            caseItem.status !== '完了'
+          );
+
+          const dateColumnWidth = 96;
+          const caseColumnWidth = 100;
+          const minContentWidth = dateColumnWidth + (visibleCases.length * caseColumnWidth) + 50;
+
+          const formatDateToYYMMDD = (date) => {
+            const year = date.getFullYear().toString().slice(-2);
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}.${month}/${day}`;
+          };
+
+          const handleCaseHover = (caseItem) => {
+            setHoveredCaseInfo(caseItem);
+          };
+
+          return (
+            <div className="p-6 bg-white rounded-xl shadow-md">
+              <h2 className="text-2xl font-semibold text-gray-700 mb-4 text-center">カレンダー表示 (縦型タイムライン)</h2>
+
+              <div
+                ref={scrollContainerRef}
+                className="relative flex-grow overflow-y-scroll overflow-x-auto border border-gray-200 rounded-lg"
+                style={{ maxHeight: `${firstViewHeight}px` }}
+              >
+                <div className="relative" style={{ minHeight: `${totalContentHeight}px`, minWidth: `${minContentWidth}px` }}>
+
+                  {datesToDisplay.map((date, index) => {
+                    const isToday = date.toDateString() === today.toDateString();
+                    const topPosition = index * heightPerDay;
+                    return (
+                      <div
+                        key={date.toISOString()}
+                        className={`absolute w-full flex items-center border-b border-gray-200 ${isToday ? 'bg-red-50' : ''}`}
+                        style={{ top: `${topPosition}px`, height: `${heightPerDay}px` }}
+                      >
+                        <div className={`w-24 text-xs text-center flex-shrink-0 ${isToday ? 'font-bold text-blue-700' : 'text-gray-600'}`}>
+                          {formatDateToYYMMDD(date)}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {visibleCases.map((caseItem, index) => {
+                    const dateColumnWidth = 96;
+                    const horizontalOffset = index * caseColumnWidth;
+                    const adjustedLeft = dateColumnWidth + horizontalOffset + 20;
+
+                    return (
+                      <div
+                        key={caseItem.id}
+                        className="absolute"
+                        style={{
+                          left: `${adjustedLeft}px`,
+                          width: `${caseColumnWidth}px`,
+                          height: '100%',
+                        }}
+                      >
+                        <VerticalCaseTimeline
+                          caseItem={caseItem}
+                          displayStartDate={displayStartDate}
+                          displayEndDate={displayEndDate}
+                          heightPerDay={heightPerDay}
+                          openEditModal={openEditModal}
+                          onCaseHover={handleCaseHover}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-gray-100 rounded-lg border border-gray-200 w-full text-left">
+                {hoveredCaseInfo ? (
+                  <div className="text-gray-800 text-sm">
+                    <p className="font-semibold">案件名: {hoveredCaseInfo.name}</p>
+                    <p>開始日: {hoveredCaseInfo.startDate || '-'}</p>
+                    <p>完了予定日: {hoveredCaseInfo.dueDate || '-'}</p>
+                    <p>ステータス: {hoveredCaseInfo.status}</p>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">案件ラインにマウスを合わせると詳細が表示されます。</p>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        // --- Login Page Component ---
+        function LoginPage({ auth, setAuthError, authError }) {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [isLogin, setIsLogin] = useState(true); // Toggle between Login and Sign Up
+
+            const handleAuthAction = async (e) => {
+                e.preventDefault();
+                setAuthError(null);
+                try {
+                    if (isLogin) {
+                        await window.firebase.signInWithEmailAndPassword(auth, email, password);
+                    } else {
+                        await window.firebase.createUserWithEmailAndPassword(auth, email, password);
+                    }
+                } catch (error) {
+                    console.error(`${isLogin ? 'ログイン' : '登録'}中にエラー:`, error);
+                    setAuthError(error.message);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8">
+                    <div className="sm:mx-auto sm:w-full sm:max-w-md">
+                        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                            {isLogin ? '案件管理へようこそ' : 'アカウントを作成'}
+                        </h2>
+                    </div>
+
+                    <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+                        <div className="bg-white py-8 px-4 shadow-xl rounded-lg sm:px-10">
+                            <form className="space-y-6" onSubmit={handleAuthAction}>
+                                <div>
+                                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">メールアドレス</label>
+                                    <div className="mt-1">
+                                        <input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">パスワード</label>
+                                    <div className="mt-1">
+                                        <input id="password" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+                                    </div>
+                                </div>
+                                
+                                {authError && <p className="text-red-500 text-xs mt-2">{authError}</p>}
+
+                                <div>
+                                    <button type="submit" className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                        {isLogin ? 'ログイン' : '登録'}
+                                    </button>
+                                </div>
+                            </form>
+
+                            <div className="mt-6">
+                                <div className="relative">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-gray-300"></div>
+                                    </div>
+                                    <div className="relative flex justify-center text-sm">
+                                        <span className="px-2 bg-white text-gray-500">
+                                            {isLogin ? 'アカウントをお持ちでないですか？' : 'すでにアカウントをお持ちですか？'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6">
+                                    <button onClick={() => { setIsLogin(!isLogin); setAuthError(null); }} className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                        {isLogin ? '新しくアカウントを作成' : 'ログイン画面へ'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Renamed Original App Component ---
+        function CaseManagementApp({ userId, userEmail, auth, db }) {
+          // All states from the original App component are kept here
+          const [cases, setCases] = useState([]);
+          const [newCaseName, setNewCaseName] = useState('');
+          const [newAssignee, setNewAssignee] = useState('');
+          const [newStatus, setNewStatus] = useState('未着手');
+          const [newStartDate, setNewStartDate] = useState('');
+          const [newDueDate, setNewDueDate] = useState('');
+          const [newBasePrice, setNewBasePrice] = useState('');
+          const [newPdfUrl, setNewPdfUrl] = useState('');
+          const [newEvents, setNewEvents] = useState([]);
+          const [newEventDate, setNewEventDate] = useState('');
+          const [newEventDescription, setNewEventDescription] = useState('');
+          const [newEvent_Type, setNewEvent_Type] = useState('提出');
+          const [newEventPdfUrl, setNewEventPdfUrl] = useState('');
+
+          const [error, setError] = useState(null);
+
+          const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+          const [editingCase, setEditingCase] = useState(null);
+          const [editedCaseName, setEditedCaseName] = useState('');
+          const [editedAssignee, setEditedAssignee] = useState('');
+          const [editedStatus, setEditedStatus] = useState('');
+          const [editedStartDate, setEditedStartDate] = useState('');
+          const [editedDueDate, setEditedDueDate] = useState('');
+          const [editedBasePrice, setEditedBasePrice] = useState('');
+          const [editedPdfUrl, setEditedPdfUrl] = useState('');
+          const [editedEvents, setEditedEvents] = useState([]);
+          
+          const [listDisplayMode, setListDisplayMode] = useState('calendar');
+          const [showAlert, setShowAlert] = useState(false);
+          const [alertMessage, setAlertMessage] = useState('');
+          const [formKey, setFormKey] = useState(0);
+
+          const showCustomAlert = (message) => {
+            setAlertMessage(message);
+            setShowAlert(true);
+          };
+
+          // Logout Handler
+          const handleLogout = async () => {
+              try {
+                  await window.firebase.signOut(auth);
+              } catch (error) {
+                  console.error("ログアウトエラー:", error);
+                  showCustomAlert("ログアウト中にエラーが発生しました。");
+              }
+          };
+
+          // --- Data Fetching and Manipulation ---
+          // Modified to use user-specific data path
+          useEffect(() => {
+            if (db && userId) {
+              setError(null);
+              // IMPORTANT: Path is changed to be user-specific
+              const casesCollectionRef = window.firebase.collection(db, `artifacts/${window.__app_id}/users/${userId}/cases`);
+              const q = window.firebase.query(casesCollectionRef);
+
+              const unsubscribe = window.firebase.onSnapshot(q, (snapshot) => {
+                const fetchedCases = snapshot.docs.map(doc => ({
+                  id: doc.id,
+                  ...doc.data()
+                }));
+                fetchedCases.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                setCases(fetchedCases);
+              }, (err) => {
+                console.error("案件データの取得エラー:", err);
+                setError("案件データの取得に失敗しました。");
+              });
+
+              return () => unsubscribe();
+            }
+          }, [db, userId]);
+
+          // Modified to use user-specific data path
+          const handleAddCase = async () => {
+            if (!newCaseName.trim() || !newAssignee.trim() || !db) {
+              showCustomAlert('案件名と担当者は必須です。');
+              return;
+            }
+            try {
+              // IMPORTANT: Path is changed to be user-specific
+              const casesCollectionRef = window.firebase.collection(db, `artifacts/${window.__app_id}/users/${userId}/cases`);
+              await window.firebase.addDoc(casesCollectionRef, {
+                name: newCaseName,
+                assignee: newAssignee,
+                status: newStatus,
+                startDate: newStartDate,
+                dueDate: newDueDate,
+                basePrice: newBasePrice ? parseFloat(newBasePrice) : 0,
+                pdfUrl: newPdfUrl,
+                events: newEvents,
+                createdAt: window.firebase.serverTimestamp(),
+                owner: userId // Use `owner` instead of `createdBy` for clarity
+              });
+            } catch (e) {
+              console.error("案件追加エラー: ", e);
+              setError("案件の追加に失敗しました。");
+            } finally {
+              // Reset form fields
+              setNewCaseName('');
+              setNewAssignee('');
+              setNewStatus('未着手');
+              setNewStartDate('');
+              setNewDueDate('');
+              setNewBasePrice('');
+              setNewPdfUrl('');
+              setNewEvents([]);
+              setNewEventDate('');
+              setNewEventDescription('');
+              setNewEvent_Type('提出');
+              setNewEventPdfUrl('');
+              setFormKey(prevKey => prevKey + 1);
+            }
+          };
+          
+          // Modified to use user-specific data path
+          const handleUpdateCase = async () => {
+            if (!editingCase || !editedCaseName.trim() || !editedAssignee.trim() || !db) {
+              showCustomAlert('案件名と担当者は必須です。');
+              return;
+            }
+            try {
+              const updatedData = {
+                name: editedCaseName,
+                assignee: editedAssignee,
+                status: editedStatus,
+                startDate: editedStartDate,
+                dueDate: editedDueDate,
+                basePrice: editedBasePrice ? parseFloat(editedBasePrice) : 0,
+                pdfUrl: editedPdfUrl,
+                events: editedEvents,
+                updatedAt: window.firebase.serverTimestamp()
+              };
+
+              // IMPORTANT: Path is changed to be user-specific
+              const caseDocRef = window.firebase.doc(db, `artifacts/${window.__app_id}/users/${userId}/cases`, editingCase.id);
+              await window.firebase.updateDoc(caseDocRef, updatedData);
+
+              showCustomAlert('案件が正常に更新されました！'); 
+              closeEditModal();
+            } catch (e) {
+              console.error("案件更新エラー: ", e);
+              setError("案件の更新に失敗しました。");
+            }
+          };
+
+          // --- Other handlers (no data path changes needed) ---
+          const handleAddNewEvent = () => {
+            if (newEventDate && newEventDescription && newEvent_Type) {
+              setNewEvents([...newEvents, { date: newEventDate, description: newEventDescription, type: newEvent_Type, pdfUrl: newEventPdfUrl, completed: false }]);
+              setNewEventDate(''); setNewEventDescription(''); setNewEvent_Type('提出'); setNewEventPdfUrl('');
+            } else { showCustomAlert('イベントの日付、内容、種類は必須です。'); }
+          };
+          const handleRemoveNewEvent = (indexToRemove) => { setNewEvents(newEvents.filter((_, i) => i !== indexToRemove)); };
+          const handleToggleNewEventCompletion = (indexToToggle) => {
+            const updatedEvents = [...newEvents];
+            if (updatedEvents[indexToToggle]) { updatedEvents[indexToToggle].completed = !updatedEvents[indexToToggle].completed; setNewEvents(updatedEvents); }
+          };
+          const openEditModal = (caseItem) => {
+            setEditingCase(caseItem); setEditedCaseName(caseItem.name); setEditedAssignee(caseItem.assignee);
+            setEditedStatus(caseItem.status); setEditedStartDate(caseItem.startDate || ''); setEditedDueDate(caseItem.dueDate || '');
+            setEditedBasePrice(caseItem.basePrice || ''); setEditedPdfUrl(caseItem.pdfUrl || ''); setEditedEvents(caseItem.events || []);
+            setNewEventDate(''); setNewEventDescription(''); setNewEvent_Type('提出'); setNewEventPdfUrl('');
+            setIsEditModalOpen(true);
+          };
+          const closeEditModal = () => { setIsEditModalOpen(false); setEditingCase(null); };
+          const handleAddEditedEvent = () => {
+            if (newEventDate && newEventDescription && newEvent_Type) {
+              setEditedEvents([...editedEvents, { date: newEventDate, description: newEventDescription, type: newEvent_Type, pdfUrl: newEventPdfUrl, completed: false }]);
+              setNewEventDate(''); setNewEventDescription(''); setNewEvent_Type('提出'); setNewEventPdfUrl('');
+            } else { showCustomAlert('イベントの日付、内容、種類は必須です。'); }
+          };
+          const handleRemoveEditedEvent = (indexToRemove) => { setEditedEvents(editedEvents.filter((_, index) => index !== indexToRemove)); };
+          const handleToggleEditedEventCompletion = (indexToToggle) => {
+            const updatedEvents = [...editedEvents];
+            if (updatedEvents[indexToToggle]) { updatedEvents[indexToToggle].completed = !updatedEvents[indexToToggle].completed; setEditedEvents(updatedEvents); }
+          };
+
+          // --- Render Method ---
+          return (
+            <div className="min-h-screen bg-gray-100 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8 font-sans">
+              <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg">
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold text-gray-800">デザイン案件管理</h1>
+                    <div className="flex items-center space-x-4">
+                        <span className="text-sm text-gray-600 hidden sm:block">{userEmail}</span>
+                        <button
+                            onClick={handleLogout}
+                            className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition"
+                        >
+                            ログアウト
+                        </button>
+                    </div>
+                </div>
+
+                {/* The rest of the original UI remains the same */}
+                <div className="mb-8 p-6 bg-blue-50 rounded-xl shadow-md">
+                  <h2 className="text-2xl font-semibold text-blue-700 mb-4">新しい案件を追加</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label htmlFor="newCaseName" className="block text-sm font-medium text-gray-700 mb-1">案件名</label>
+                      <input type="text" id="newCaseName" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newCaseName} onChange={(e) => setNewCaseName(e.target.value)} placeholder="例: 株式会社ABC ロゴデザイン" />
+                    </div>
+                    <div>
+                      <label htmlFor="newAssignee" className="block text-sm font-medium text-gray-700 mb-1">担当者</label>
+                      <input type="text" id="newAssignee" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)} placeholder="例: 山田太郎" />
+                    </div>
+                    <div>
+                      <label htmlFor="newStartDate" className="block text-sm font-medium text-gray-700 mb-1">開始日</label>
+                      <input type="date" id="newStartDate" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newStartDate} onChange={(e) => setNewStartDate(e.target.value)} />
+                    </div>
+                    <div>
+                      <label htmlFor="newDueDate" className="block text-sm font-medium text-gray-700 mb-1">完了予定日</label>
+                      <input type="date" id="newDueDate" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} />
+                    </div>
+                    <div>
+                      <label htmlFor="newStatus" className="block text-sm font-medium text-gray-700 mb-1">ステータス</label>
+                      <select id="newStatus" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
+                        <option value="未着手">未着手</option>
+                        <option value="進行中">進行中</option>
+                        <option value="確認待ち">確認待ち</option>
+                        <option value="完了">完了</option>
+                        <option value="キャンセル">キャンセル</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="newBasePrice" className="block text-sm font-medium text-gray-700 mb-1">基本料金 (円)</label>
+                      <input type="number" id="newBasePrice" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newBasePrice} onChange={(e) => setNewBasePrice(e.target.value)} placeholder="例: 50000" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label htmlFor="newPdfUrl" className="block text-sm font-medium text-gray-700 mb-1">PDF URL (添付用)</label>
+                      <input type="url" id="newPdfUrl" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newPdfUrl} onChange={(e) => setNewPdfUrl(e.target.value)} placeholder="例: https://example.com/document.pdf" />
+                    </div>
+                  </div>
+                  <div className="mb-4 p-4 bg-blue-100 rounded-md">
+                    <h3 className="text-lg font-semibold text-blue-800 mb-2">タイムラインイベントを追加</h3>
+                    <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                      <input type="date" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} />
+                      <input type="text" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newEventDescription} onChange={(e) => setNewEventDescription(e.target.value)} placeholder="例: 校正提出済み" />
+                      <input type="url" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newEventPdfUrl} onChange={(e) => setNewEventPdfUrl(e.target.value)} placeholder="イベント関連PDF URL (任意)" />
+                      <select className="flex-shrink-0 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={newEvent_Type} onChange={(e) => setNewEvent_Type(e.target.value)}>
+                        <option value="提出">提出</option>
+                        <option value="タスク">タスク</option>
+                      </select>
+                      <button onClick={handleAddNewEvent} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md shadow-sm transition duration-300">追加</button>
+                    </div>
+                    <div className="mt-3">
+                      {newEvents.length > 0 ? (
+                        <ul className="list-disc list-inside text-sm text-gray-700">
+                          {newEvents.map((event, index) => (
+                            <li key={index} className={`flex justify-between items-center py-1 ${event.completed ? 'line-through text-gray-500' : ''}`}>
+                                <span>
+                                  [{event.type}] {event.date}: {event.description}
+                                  {event.pdfUrl && <a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs ml-2">PDF</a>}
+                                </span>
+                                <div>
+                                  <button onClick={() => handleToggleNewEventCompletion(index)} className={`ml-2 px-2 py-1 rounded-md text-xs font-semibold ${event.completed ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                                    {event.completed ? '完了済み' : '完了'}
+                                  </button>
+                                  <button onClick={() => handleRemoveNewEvent(index)} className="text-red-500 hover:text-red-700 ml-2">&times;</button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : ( <p className="text-sm text-gray-500">イベントはまだありません。</p> )}
+                      </div>
+                    </div>
+                    <button onClick={handleAddCase} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">案件を追加</button>
+                </div>
+                
+                {/* Display mode buttons */}
+                <div className="mb-6 flex justify-center space-x-4">
+                  {['card', 'table', 'timeline', 'calendar'].map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setListDisplayMode(mode)}
+                      className={`py-2 px-6 rounded-lg font-semibold transition duration-300 ${
+                        listDisplayMode === mode ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      { {card: 'カード', table: 'テーブル', timeline: 'タイムライン', calendar: 'カレンダー'}[mode] }表示
+                    </button>
+                  ))}
+                </div>
+
+                {/* Conditional rendering for different views */}
+                {listDisplayMode === 'card' && (
+                  <div className="p-6 bg-white rounded-xl shadow-md">
+                      <h2 className="text-2xl font-semibold text-gray-700 mb-4">案件一覧 (カード表示)</h2>
+                      {cases.length === 0 ? (<p className="text-gray-500 text-center">案件がありません。</p>) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {cases.map((caseItem) => (
+                                  <div key={caseItem.id} className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col">
+                                      {/* Card content... */}
+                                      <h3 className="text-lg font-semibold text-gray-800 mb-2">{caseItem.name}</h3>
+                                      <p className="text-gray-600 text-sm">担当者: {caseItem.assignee}</p>
+                                      <p className="text-gray-600 text-sm">ステータス: <span className={`font-medium ${ caseItem.status === '完了' ? 'text-green-600' : caseItem.status === '進行中' ? 'text-blue-600' : caseItem.status === '確認待ち' ? 'text-yellow-600' : caseItem.status === 'キャンセル' ? 'text-red-600' : 'text-gray-600' }`}>{caseItem.status}</span></p>
+                                      {caseItem.startDate && <p className="text-gray-600 text-xs">開始日: {caseItem.startDate}</p>}
+                                      {caseItem.dueDate && <p className="text-gray-600 text-xs">完了予定日: {caseItem.dueDate}</p>}
+                                      {caseItem.basePrice > 0 && <p className="text-gray-600 text-xs">基本料金: {caseItem.basePrice.toLocaleString()}円</p>}
+                                      {caseItem.pdfUrl && <p className="text-gray-600 text-xs">PDF: <a href={caseItem.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">表示</a></p>}
+                                      {caseItem.events && caseItem.events.length > 0 && <div className="mt-2 text-xs text-gray-600"><strong>イベント:</strong><ul className="list-disc list-inside">{caseItem.events.map((event, idx) => (<li key={idx} className={`${event.completed ? 'line-through text-gray-500' : ''}`}>[{event.type}] {event.date}: {event.description}{event.pdfUrl && <a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs ml-2">PDF</a>}</li>))}</ul></div>}
+                                      {caseItem.createdAt && <p className="text-gray-500 text-xs mt-auto pt-2">作成日: {new Date(caseItem.createdAt.toDate()).toLocaleString()}</p>}
+                                      <button onClick={() => openEditModal(caseItem)} className="mt-4 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-sm">編集</button>
+                                  </div>
+                              ))}
+                          </div>
+                      )}
+                  </div>
+                )}
+                {listDisplayMode === 'table' && ( <div className="p-6 bg-white rounded-xl shadow-md"> <h2 className="text-2xl font-semibold text-gray-700 mb-4">案件一覧 (テーブル表示)</h2> {cases.length === 0 ? ( <p className="text-gray-500 text-center">案件がありません。</p> ) : ( <div className="w-full overflow-x-auto"> <table className="min-w-full bg-white border border-gray-200 rounded-lg"> <thead> <tr className="bg-gray-100 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider"><th className="py-3 px-4 border-b">案件名</th><th className="py-3 px-4 border-b">担当者</th><th className="py-3 px-4 border-b">ステータス</th><th className="py-3 px-4 border-b">基本料金</th><th className="py-3 px-4 border-b">タスク</th><th className="py-3 px-4 border-b">操作</th></tr> </thead> <tbody> {cases.map((caseItem) => ( <tr key={caseItem.id} className="border-b border-gray-200 hover:bg-gray-50"><td className="py-3 px-4 text-sm text-gray-800 font-semibold">{caseItem.name}</td><td className="py-3 px-4 text-sm text-gray-600">{caseItem.assignee}</td><td className="py-3 px-4 text-sm text-gray-600"><span className={`font-medium ${ caseItem.status === '完了' ? 'text-green-600' : caseItem.status === '進行中' ? 'text-blue-600' : caseItem.status === '確認待ち' ? 'text-yellow-600' : caseItem.status === 'キャンセル' ? 'text-red-600' : 'text-gray-600' }`}>{caseItem.status}</span></td><td className="py-3 px-4 text-sm text-gray-600">{caseItem.basePrice ? `${caseItem.basePrice.toLocaleString()}円` : '-'}</td><td className="py-3 px-4 text-sm text-gray-600">{caseItem.events ? caseItem.events.length : 0}</td><td className="py-3 px-4"><button onClick={() => openEditModal(caseItem)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-xs">編集</button></td></tr> ))} </tbody> </table> </div> )} </div> )}
+                {listDisplayMode === 'timeline' && ( <div className="p-6 bg-white rounded-xl shadow-md"> <h2 className="text-2xl font-semibold text-gray-700 mb-4">案件一覧 (タイムライン表示)</h2> {cases.filter(caseItem => caseItem.status !== '完了').length === 0 ? ( <p className="text-gray-500 text-center">表示する案件がありません。</p> ) : ( <div className="w-full overflow-x-auto space-y-4"> {cases.filter(caseItem => caseItem.status !== '完了').map((caseItem) => ( <div key={caseItem.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"> <div className="font-semibold text-gray-800 mb-2">{caseItem.name}</div><TimelineBar startDate={caseItem.startDate} dueDate={caseItem.dueDate} status={caseItem.status} events={caseItem.events} /><div className="mt-4 text-right"><button onClick={() => openEditModal(caseItem)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-xs">編集</button></div></div> ))} </div> )} </div> )}
+                {listDisplayMode === 'calendar' && ( <ListCalendarView cases={cases} openEditModal={openEditModal} /> )}
+
+                {/* Edit Modal (no changes) */}
+                {isEditModalOpen && editingCase && (
+                  <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full relative max-h-[90vh] overflow-y-auto">
+                      <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">案件を編集</h2>
+                      <button onClick={closeEditModal} className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div><label htmlFor="editedCaseName" className="block text-sm font-medium text-gray-700 mb-1">案件名</label><input type="text" id="editedCaseName" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={editedCaseName} onChange={(e) => setEditedCaseName(e.target.value)} /></div>
+                        <div><label htmlFor="editedAssignee" className="block text-sm font-medium text-gray-700 mb-1">担当者</label><input type="text" id="editedAssignee" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={editedAssignee} onChange={(e) => setEditedAssignee(e.target.value)} /></div>
+                        <div><label htmlFor="editedStartDate" className="block text-sm font-medium text-gray-700 mb-1">開始日</label><input type="date" id="editedStartDate" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={editedStartDate} onChange={(e) => setEditedStartDate(e.target.value)} /></div>
+                        <div><label htmlFor="editedDueDate" className="block text-sm font-medium text-gray-700 mb-1">完了予定日</label><input type="date" id="editedDueDate" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={editedDueDate} onChange={(e) => setEditedDueDate(e.target.value)} /></div>
+                        <div><label htmlFor="editedStatus" className="block text-sm font-medium text-gray-700 mb-1">ステータス</label><select id="editedStatus" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={editedStatus} onChange={(e) => setEditedStatus(e.target.value)}><option value="未着手">未着手</option><option value="進行中">進行中</option><option value="確認待ち">確認待ち</option><option value="完了">完了</option><option value="キャンセル">キャンセル</option></select></div>
+                        <div><label htmlFor="editedBasePrice" className="block text-sm font-medium text-gray-700 mb-1">基本料金 (円)</label><input type="number" id="editedBasePrice" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={editedBasePrice} onChange={(e) => setEditedBasePrice(e.target.value)} /></div>
+                        <div className="md:col-span-2"><label htmlFor="editedPdfUrl" className="block text-sm font-medium text-gray-700 mb-1">PDF URL (添付用)</label><input type="url" id="editedPdfUrl" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" value={editedPdfUrl} onChange={(e) => setEditedPdfUrl(e.target.value)} /></div>
+                      </div>
+                      <div className="mb-4 p-4 bg-blue-100 rounded-md">
+                        <h3 className="text-lg font-semibold text-blue-800 mb-2">タイムラインイベント</h3>
+                        <div className="flex flex-wrap items-end gap-2 mb-2">
+                            <div className="flex-1 min-w-[120px]"><input type="date" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} /></div>
+                            <div className="flex-1 min-w-[150px]"><input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm" value={newEventDescription} onChange={(e) => setNewEventDescription(e.target.value)} placeholder="例: 校正提出済み" /></div>
+                            <div className="flex-1 min-w-[150px]"><input type="url" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm" value={newEventPdfUrl} onChange={(e) => setNewEventPdfUrl(e.target.value)} placeholder="イベント関連PDF URL (任意)" /></div>
+                            <div className="flex-shrink-0 w-full sm:w-auto"><select className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm" value={newEvent_Type} onChange={(e) => setNewEvent_Type(e.target.value)}><option value="提出">提出</option><option value="タスク">タスク</option></select></div>
+                            <button onClick={handleAddEditedEvent} className="w-full sm:w-auto bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md shadow-sm transition duration-300">追加</button>
+                        </div>
+                        <div className="mt-3 max-h-48 overflow-y-auto pr-2">
+                            {editedEvents.length > 0 ? (<ul className="list-disc list-inside text-sm text-gray-700">{editedEvents.map((event, index) => (<li key={index} className={`flex justify-between items-center py-1 ${event.completed ? 'line-through text-gray-500' : ''}`}><span>[{event.type}] {event.date}: {event.description}{event.pdfUrl && <a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs ml-2">PDF</a>}</span><div><button onClick={() => handleToggleEditedEventCompletion(index)} className={`ml-2 px-2 py-1 rounded-md text-xs font-semibold ${event.completed ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{event.completed ? '完了済み' : '完了'}</button><button onClick={() => handleRemoveEditedEvent(index)} className="text-red-500 hover:text-red-700 ml-2">&times;</button></div></li>))}</ul>) : (<p className="text-sm text-gray-500">イベントはまだありません。</p>)}
+                        </div>
+                      </div>
+                      <button onClick={handleUpdateCase} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">案件を更新</button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Alert Modal (no changes) */}
+                {showAlert && (
+                  <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full relative">
+                      <h3 className="text-lg font-bold text-gray-800 mb-4">お知らせ</h3>
+                      <p className="text-gray-700 mb-6">{alertMessage}</p>
+                      <button onClick={() => setShowAlert(false)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition">閉じる</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // --- Main App Component (Router) ---
+        function App() {
+            const [user, setUser] = useState(null);
+            const [db, setDb] = useState(null);
+            const [auth, setAuth] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [authError, setAuthError] = useState(null);
+
+            useEffect(() => {
+                try {
+                    let firebaseConfig = window.__firebase_config;
+                    let mainApp;
+
+                    if (!window.firebase.getApps().length) {
+                        mainApp = window.firebase.initializeApp(firebaseConfig, "mainApp");
+                    } else {
+                        mainApp = window.firebase.getApp("mainApp");
+                    }
+                    
+                    const firestoreDb = window.firebase.getFirestore(mainApp);
+                    const firebaseAuth = window.firebase.getAuth(mainApp);
+                    
+                    setDb(firestoreDb);
+                    setAuth(firebaseAuth);
+
+                    const unsubscribe = window.firebase.onAuthStateChanged(firebaseAuth, (user) => {
+                        setUser(user);
+                        setLoading(false);
+                    });
+
+                    return () => unsubscribe();
+                } catch (err) {
+                    console.error("Firebase 初期化エラー:", err);
+                    setAuthError("Firebaseの初期化に失敗しました。設定を確認してください。");
+                    setLoading(false);
+                }
+            }, []);
+
+            if (loading) {
+                return <div className="min-h-screen flex items-center justify-center bg-gray-100"><p className="text-lg font-semibold text-gray-600">読み込み中...</p></div>;
+            }
+            
+            if (authError && !auth) {
+                return <div className="min-h-screen flex items-center justify-center bg-red-100 text-red-700 p-4"><p>{authError}</p></div>;
+            }
+
+            return (
+                <div>
+                    {user ? (
+                        <CaseManagementApp 
+                            userId={user.uid} 
+                            userEmail={user.email} 
+                            auth={auth} 
+                            db={db} 
+                        />
+                    ) : (
+                        <LoginPage auth={auth} setAuthError={setAuthError} authError={authError} />
+                    )}
+                </div>
+            );
+        }
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
