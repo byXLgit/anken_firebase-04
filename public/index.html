@@ -49,7 +49,7 @@
             EmailAuthProvider,
             verifyBeforeUpdateEmail
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, getDocs, writeBatch, getDoc, runTransaction, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, getDocs, writeBatch, getDoc, runTransaction, setDoc, arrayRemove, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
 
         window.firebase = {
@@ -59,7 +59,7 @@
             updatePassword, reauthenticateWithCredential, EmailAuthProvider,
             verifyBeforeUpdateEmail,
             getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp,
-            doc, updateDoc, deleteDoc, arrayUnion, getDocs, writeBatch, getDoc, runTransaction, setDoc
+            doc, updateDoc, deleteDoc, arrayUnion, getDocs, writeBatch, getDoc, runTransaction, setDoc, arrayRemove, deleteField
         };
     </script>
 
@@ -226,62 +226,45 @@
         const SettingsModal = ({ user, auth, closeModal, showCustomAlert }) => { /* No Changes */ };
         
         const MemberManagementModal = ({ show, onClose, item, db, userId, showCustomAlert }) => {
-            const [inviteRole, setInviteRole] = useState('viewer');
-            const [pendingInvites, setPendingInvites] = useState([]);
-
-            useEffect(() => {
-                if(!db || !item?.id) return;
-                const collectionRef = window.firebase.collection(db, `artifacts/${window.__app_id}/projectInvitations`);
-                const q = window.firebase.query(collectionRef, window.firebase.where('projectId', '==', item.id));
-
-                const unsubscribe = window.firebase.onSnapshot(q, (snapshot) => {
-                    const invites = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setPendingInvites(invites);
-                });
-                return () => unsubscribe();
-            }, [db, item]);
-
-            const generateCode = () => {
-                const chars = 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789';
-                let result = '';
-                for (let i = 0; i < 6; i++) {
-                    result += chars.charAt(Math.floor(Math.random() * chars.length));
-                }
-                return result;
-            };
-
-            const handleGenerateCode = async () => {
-                try {
-                    const code = generateCode();
-                    const invitationRef = window.firebase.doc(db, `artifacts/${window.__app_id}/projectInvitations`, code);
-                    
-                    await window.firebase.setDoc(invitationRef, {
-                        projectId: item.id,
-                        projectName: item.name,
-                        role: inviteRole,
-                        createdBy: userId,
-                        createdAt: window.firebase.serverTimestamp()
-                    });
-                    showCustomAlert(`参加コード「${code}」を発行しました。`);
-                } catch (error) {
-                    console.error("Error generating invite code: ", error);
-                    showCustomAlert("参加コードの発行に失敗しました。");
-                }
-            };
-
-            const handleDeleteCode = async (codeId) => {
-                 if(!window.confirm(`参加コード「${codeId}」を削除しますか？このコードは無効になります。`)) return;
-                try {
-                    const codeRef = window.firebase.doc(db, `artifacts/${window.__app_id}/projectInvitations`, codeId);
-                    await window.firebase.deleteDoc(codeRef);
-                    showCustomAlert("参加コードを削除しました。");
-                } catch (error) {
-                    console.error("Error deleting invite code:", error);
-                    showCustomAlert("コードの削除に失敗しました。");
-                }
-            };
-            
             const getRoleDisplayName = (role) => ({ owner: 'オーナー', editor: '編集者', viewer: '閲覧者' }[role] || '不明');
+            
+            const handleCopyCode = (code) => {
+                if(!code) {
+                    showCustomAlert("コードが見つかりません。");
+                    return;
+                }
+                const dummy = document.createElement("textarea");
+                document.body.appendChild(dummy);
+                dummy.value = code;
+                dummy.select();
+                document.execCommand("copy");
+                document.body.removeChild(dummy);
+                showCustomAlert(`コード「${code}」をコピーしました。`);
+            };
+
+            const handleRemoveMember = async (memberIdToRemove) => {
+                if (memberIdToRemove === userId) {
+                    showCustomAlert("自分自身を削除することはできません。");
+                    return;
+                }
+                if (!window.confirm("本当にこのメンバーをプロジェクトから削除しますか？")) return;
+
+                try {
+                    const projectRef = window.firebase.doc(db, `artifacts/${window.__app_id}/projects`, item.id);
+                    await window.firebase.updateDoc(projectRef, {
+                        memberIds: window.firebase.arrayRemove(memberIdToRemove),
+                        [`accessControl.${memberIdToRemove}`]: window.firebase.deleteField()
+                    });
+                    showCustomAlert("メンバーを削除しました。");
+                } catch (error) {
+                    console.error("メンバーの削除に失敗しました:", error);
+                    showCustomAlert("メンバーの削除に失敗しました。");
+                }
+            };
+
+            const currentUserRole = item.accessControl?.[userId]?.role;
+
+            if (!show) return null;
 
             return (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
@@ -297,33 +280,35 @@
                                         <span className="text-sm text-gray-800 truncate">
                                             {memberData.email || uid} {uid === userId && "(あなた)"}
                                         </span>
-                                        <span className="text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full">{getRoleDisplayName(memberData.role)}</span>
+                                        <div className="flex items-center">
+                                            <span className="text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full">{getRoleDisplayName(memberData.role)}</span>
+                                            {currentUserRole === 'owner' && uid !== userId && (
+                                                <button onClick={() => handleRemoveMember(uid)} className="ml-3 text-red-500 hover:text-red-700 font-bold">&times;</button>
+                                            )}
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
                         </div>
-                         <div className="mb-6">
-                            <h3 className="text-lg font-semibold text-gray-700 mb-2">新しい参加コードを発行</h3>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                                <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white">
-                                    <option value="viewer">閲覧者</option>
-                                    <option value="editor">編集者</option>
-                                </select>
-                                <button onClick={handleGenerateCode} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">コードを生成</button>
-                            </div>
-                        </div>
-                        {pendingInvites.length > 0 && (
-                            <div className="mt-6 border-t pt-4">
-                                <h3 className="text-lg font-semibold text-gray-700 mb-2">有効な参加コード</h3>
-                                <ul className="space-y-2">
-                                    {pendingInvites.map(invite => (
-                                        <li key={invite.id} className="flex justify-between items-center bg-yellow-50 p-2 rounded-md">
-                                            <span className="font-mono tracking-widest text-lg text-gray-800">{invite.id}</span>
-                                            <span className="text-sm font-medium">{getRoleDisplayName(invite.role)}</span>
-                                            <button onClick={() => handleDeleteCode(invite.id)} className="text-red-500 hover:text-red-700 text-sm font-bold">&times; 削除</button>
-                                        </li>
-                                    ))}
-                                </ul>
+                        {currentUserRole === 'owner' && (
+                             <div className="mt-6 border-t pt-4">
+                                <h3 className="text-lg font-semibold text-gray-700 mb-2">参加コード</h3>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center bg-yellow-50 p-3 rounded-md">
+                                        <div>
+                                            <p className="font-semibold text-gray-800">閲覧者用コード</p>
+                                            <p className="font-mono tracking-widest text-lg text-gray-900">{item.invitationCodes?.viewer || 'N/A'}</p>
+                                        </div>
+                                        <button onClick={() => handleCopyCode(item.invitationCodes?.viewer)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg shadow-md text-xs">コピー</button>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-yellow-50 p-3 rounded-md">
+                                        <div>
+                                            <p className="font-semibold text-gray-800">編集者用コード</p>
+                                            <p className="font-mono tracking-widest text-lg text-gray-900">{item.invitationCodes?.editor || 'N/A'}</p>
+                                        </div>
+                                        <button onClick={() => handleCopyCode(item.invitationCodes?.editor)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg shadow-md text-xs">コピー</button>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -335,6 +320,15 @@
             const [newProjectName, setNewProjectName] = useState('');
             const [isMemberModalOpen, setMemberModalOpen] = useState(false);
             const [selectedProject, setSelectedProject] = useState(null);
+
+            const generateCode = () => {
+                const chars = 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789';
+                let result = '';
+                for (let i = 0; i < 6; i++) {
+                    result += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return result;
+            };
 
             useEffect(() => {
                 if (!db || !userId) return;
@@ -364,7 +358,11 @@
                         ownerId: userId,
                         memberIds: [userId],
                         accessControl: { [userId]: { role: 'owner', email: userEmail } },
-                        createdAt: window.firebase.serverTimestamp()
+                        createdAt: window.firebase.serverTimestamp(),
+                        invitationCodes: {
+                            viewer: generateCode(),
+                            editor: generateCode(),
+                        }
                     });
                     setNewProjectName('');
                     showCustomAlert(`プロジェクト「${newProjectName}」を作成しました。`);
@@ -448,6 +446,8 @@
             
             useEffect(() => {
                 if (!db || !userId) return;
+                
+                let unsubscribeCases = () => {};
 
                 const projectsRef = window.firebase.collection(db, `artifacts/${window.__app_id}/projects`);
                 const qProjects = window.firebase.query(projectsRef, window.firebase.where("memberIds", "array-contains", userId));
@@ -460,6 +460,29 @@
                     
                     if(!selectedProjectId && userProjects.length > 0){
                         setSelectedProjectId(userProjects[0].id);
+                    }
+
+                    const projectIds = userProjects.map(p => p.id);
+
+                    if (projectIds.length > 0) {
+                        const casesRef = window.firebase.collection(db, `artifacts/${window.__app_id}/cases`);
+                        const qCases = window.firebase.query(casesRef, window.firebase.where("projectId", "in", projectIds));
+                        
+                        unsubscribeCases(); 
+                        unsubscribeCases = window.firebase.onSnapshot(qCases, (caseSnapshot) => {
+                            const fetchedCases = caseSnapshot.docs.map(doc => {
+                                const project = newProjectMap[doc.data().projectId];
+                                return { 
+                                    id: doc.id, 
+                                    ...doc.data(),
+                                    accessControl: project ? project.accessControl : {}
+                                };
+                            });
+                            fetchedCases.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                            setCases(fetchedCases);
+                        });
+                    } else {
+                        setCases([]);
                     }
                 }, (err) => {
                     console.error("プロジェクトの取得エラー:", err);
@@ -475,38 +498,9 @@
                 return () => {
                     unsubscribeProjects();
                     unsubscribeClients();
+                    unsubscribeCases();
                 };
             }, [db, userId]);
-            
-            // ▼▼▼ 修正点: 案件の取得ロジックをプロジェクトと分離 ▼▼▼
-            useEffect(() => {
-                if (projects.length === 0 || !db) {
-                  setCases([]);
-                  return;
-                }
-                const projectIds = projects.map(p => p.id);
-                const casesRef = window.firebase.collection(db, `artifacts/${window.__app_id}/cases`);
-                const qCases = window.firebase.query(casesRef, window.firebase.where("projectId", "in", projectIds));
-                
-                const unsubscribeCases = window.firebase.onSnapshot(qCases, (caseSnapshot) => {
-                    const fetchedCases = caseSnapshot.docs.map(doc => ({ 
-                        id: doc.id, 
-                        ...doc.data(),
-                    }));
-                    fetchedCases.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
-                    setCases(fetchedCases);
-
-                    const assignees = [...new Set(fetchedCases.map(c => c.assignee).filter(Boolean))];
-                    setAllAssignees(assignees);
-                }, (err) => {
-                    console.error("案件の取得エラー:", err);
-                    setError("案件データの取得に失敗しました。");
-                });
-
-                return () => unsubscribeCases();
-
-            }, [db, projects]);
-
 
             const addNewClientTag = async (clientName) => {
                 if (!clientName || allClients.includes(clientName)) return;
@@ -629,11 +623,8 @@
                     if (endFilter && caseStartDate && caseStartDate > endFilter) { return false; }
                     
                     return clientMatch && assigneeMatch && statusMatch;
-                }).map(caseItem => {
-                    const project = projectMap[caseItem.projectId];
-                    return { ...caseItem, accessControl: project?.accessControl || {} };
                 });
-            }, [cases, filterClient, filterAssignee, filterStatus, filterStartDate, filterEndDate, projectMap]);
+            }, [cases, filterClient, filterAssignee, filterStatus, filterStartDate, filterEndDate]);
             
             const renderCurrentView = () => {
                 const viewProps = { cases: filteredCases, openEditModal, userId };
@@ -959,37 +950,41 @@
                 const uppercaseCode = code.trim().toUpperCase();
 
                 try {
-                    await window.firebase.runTransaction(db, async (transaction) => {
-                        const invitationRef = window.firebase.doc(db, `artifacts/${window.__app_id}/projectInvitations`, uppercaseCode);
-                        const invitationSnap = await transaction.get(invitationRef);
+                    const projectsRef = window.firebase.collection(db, `artifacts/${window.__app_id}/projects`);
+                    const viewerQuery = window.firebase.query(projectsRef, window.firebase.where("invitationCodes.viewer", "==", uppercaseCode));
+                    const editorQuery = window.firebase.query(projectsRef, window.firebase.where("invitationCodes.editor", "==", uppercaseCode));
+                    
+                    const [viewerSnapshot, editorSnapshot] = await Promise.all([
+                        window.firebase.getDocs(viewerQuery),
+                        window.firebase.getDocs(editorQuery)
+                    ]);
+                    
+                    let projectDoc;
+                    let role;
 
-                        if (!invitationSnap.exists()) {
-                            throw new Error("無効な参加コードです。");
-                        }
-                        
-                        const invitation = invitationSnap.data();
-                        const projectRef = window.firebase.doc(db, `artifacts/${window.__app_id}/projects`, invitation.projectId);
-                        const projectSnap = await transaction.get(projectRef);
+                    if (!viewerSnapshot.empty) {
+                        projectDoc = viewerSnapshot.docs[0];
+                        role = 'viewer';
+                    } else if (!editorSnapshot.empty) {
+                        projectDoc = editorSnapshot.docs[0];
+                        role = 'editor';
+                    } else {
+                        throw new Error("無効な参加コードです。");
+                    }
 
-                        if (!projectSnap.exists()) {
-                            throw new Error("招待元のプロジェクトが見つかりません。");
-                        }
-                        
-                        const projectData = projectSnap.data();
-                        if (projectData.memberIds.includes(user.uid)) {
-                            transaction.delete(invitationRef);
-                            throw new Error("あなたはこのプロジェクトに既に参加しています。");
-                        }
+                    const projectRef = projectDoc.ref;
+                    const projectData = projectDoc.data();
 
-                        transaction.update(projectRef, {
-                            memberIds: window.firebase.arrayUnion(user.uid),
-                            [`accessControl.${user.uid}`]: { role: invitation.role, email: user.email }
-                        });
-                        
-                        transaction.delete(invitationRef);
+                    if (projectData.memberIds.includes(user.uid)) {
+                        throw new Error("あなたはこのプロジェクトに既に参加しています。");
+                    }
+                    
+                    await window.firebase.updateDoc(projectRef, {
+                        memberIds: window.firebase.arrayUnion(user.uid),
+                        [`accessControl.${user.uid}`]: { role: role, email: user.email }
                     });
-
-                    showCustomAlert("プロジェクトに参加しました！");
+                    
+                    showCustomAlert(`プロジェクト「${projectData.name}」に参加しました！`);
                     onClose();
 
                 } catch (error) {
@@ -1012,7 +1007,7 @@
                                   value={code} 
                                   onChange={(e) => setCode(e.target.value)} 
                                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm uppercase" 
-                                  placeholder="ABC-123"
+                                  placeholder="ABCDEF"
                                 />
                             </div>
                             <button onClick={handleJoin} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">参加する</button>
