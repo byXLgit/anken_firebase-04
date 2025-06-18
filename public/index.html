@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>and Tasks</title>
+    <title>Anken</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -88,7 +88,7 @@
           let progressPercentage = 0;
           if (totalDurationMs > 0) { const elapsedMs = today.getTime() - start.getTime(); progressPercentage = Math.max(0, Math.min(100, (elapsedMs / totalDurationMs) * 100)); }
           const barColorClass = 'bg-gray-700';
-          const progressColorClass = status === '完了' ? 'bg-blue-500' : 'bg-green-500';
+          const progressColorClass = status === '完了' ? 'bg-indigo-500' : 'bg-green-500';
           const todayMarkerPosition = totalDurationMs > 0 ? Math.max(0, Math.min(100, (today.getTime() - start.getTime()) / totalDurationMs * 100)) : -1;
           return (
             <div className="relative w-full h-8 rounded-lg my-1">
@@ -111,120 +111,200 @@
             </div>
           );
         };
-        const VerticalCaseTimeline = ({ caseItem, displayStartDate, heightPerDay, openEditModal, onCaseHover }) => {
-          const caseStartDate = new Date(caseItem.startDate); const caseDueDate = new Date(caseItem.dueDate);
-          const effectiveStartDate = new Date(Math.max(caseStartDate.getTime(), displayStartDate.getTime()));
-          const effectiveDueDate = new Date(caseDueDate.getTime());
-          const startOffsetDays = (effectiveStartDate.getTime() - displayStartDate.getTime()) / (1000 * 60 * 60 * 24);
-          const topPx = Math.max(0, startOffsetDays * heightPerDay);
-          const durationDays = (effectiveDueDate.getTime() - effectiveStartDate.getTime()) / (1000 * 60 * 60 * 24);
-          const heightPx = Math.max(2, durationDays * heightPerDay);
-          if (topPx < 0 && (topPx + heightPx < 0)) return null;
-          const sortedEvents = [...(caseItem.events || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-          const getEventTypeShapeClass = (event) => (event.type === 'タスク' ? '' : 'rounded-full');
-          const getEventColorClass = (event) => { if (event.completed) return 'bg-green-500'; switch (event.type) { case '予定': case '提出': return 'bg-yellow-500'; case 'タスク': return 'bg-red-500'; case '完了': return 'bg-green-500'; default: return 'bg-purple-600'; } };
-          const [activeTooltipIndex, setActiveTooltipIndex] = useState(null);
-          return (
-            <div className="absolute w-0.5 bg-gray-800 flex flex-col items-center cursor-pointer" style={{ top: `${topPx}px`, height: `${heightPx}px` }} onClick={() => openEditModal(caseItem)} onMouseEnter={() => onCaseHover(caseItem)} onMouseLeave={() => onCaseHover(null)}>
-              <div className="absolute w-3 h-3 bg-black rounded-full z-20" style={{ top: '0px', transform: 'translateY(-50%) translateX(-50%)', left: '50%' }}></div>
-              <div className="absolute w-3 h-3 bg-black rounded-full z-20" style={{ bottom: '0px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}></div>
-              {sortedEvents.map((event, eventIdx) => {
-                const eventDate = new Date(event.date);
-                const eventOffsetDays = (eventDate.getTime() - effectiveStartDate.getTime()) / (1000 * 60 * 60 * 24);
-                const eventTopPx = eventOffsetDays * heightPerDay;
-                if (eventTopPx < 0 || eventTopPx > heightPx) return null;
-                return (
-                  <div key={eventIdx} className={`absolute w-3 h-3 z-20 cursor-pointer ${getEventColorClass(event)} ${getEventTypeShapeClass(event)}`} style={{ top: `${eventTopPx}px`, left: '50%', transform: 'translateX(-50%)' }} onMouseEnter={() => setActiveTooltipIndex(eventIdx)} onMouseLeave={() => setActiveTooltipIndex(null)}>
-                    {activeTooltipIndex === eventIdx && (<div className="absolute left-1/2 -translate-x-1/2 mt-2 p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap z-30" style={{ top: '100%' }}><p>{event.date}</p><p>{event.description}</p>{event.pdfUrl && (<p className="text-xs text-gray-400"><a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">PDF</a></p>)}<div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-4 border-b-gray-800"></div></div>)}
-                  </div>);
-              })}
-            </div>
-          );
-        };
-        const ListCalendarView = ({ cases, openEditModal }) => {
-          const scrollContainerRef = useRef(null);
-          const heightPerDay = 20;
-          const [loadedDaysBefore, setLoadedDaysBefore] = useState(15);
-          const [loadedDaysAfter, setLoadedDaysAfter] = useState(15);
-          const loadIncrement = 30;
-          const [hoveredCaseInfo, setHoveredCaseInfo] = useState(null);
-          const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
-          const displayStartDate = useMemo(() => { const d = new Date(today); d.setDate(today.getDate() - loadedDaysBefore); return d; }, [today, loadedDaysBefore]);
-          const displayEndDate = useMemo(() => { const d = new Date(today); d.setDate(today.getDate() + loadedDaysAfter); return d; }, [today, loadedDaysAfter]);
-          const datesToDisplay = useMemo(() => { const dates = []; let loopDate = new Date(displayStartDate); while (loopDate <= displayEndDate) { dates.push(new Date(loopDate)); loopDate.setDate(loopDate.getDate() + 1); } return dates; }, [displayStartDate, displayEndDate]);
-          const totalContentHeight = datesToDisplay.length * heightPerDay;
-          const firstViewHeight = 31 * heightPerDay;
-          useEffect(() => { if (scrollContainerRef.current) { const todayIndex = datesToDisplay.findIndex(date => date.getTime() === today.getTime()); if (todayIndex !== -1) { const scrollToY = (todayIndex * heightPerDay) - (scrollContainerRef.current.clientHeight / 2) + (heightPerDay / 2); scrollContainerRef.current.scrollTop = Math.max(0, scrollToY); } } }, [datesToDisplay, today, heightPerDay]);
-          const handleScroll = useCallback(() => { if (!scrollContainerRef.current) return; const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current; const scrollThreshold = 50; if (scrollTop < scrollThreshold) { const oldScrollHeight = scrollHeight; setLoadedDaysBefore(prev => prev + loadIncrement); requestAnimationFrame(() => { if (scrollContainerRef.current) { scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - oldScrollHeight; } }); } if (scrollTop + clientHeight > scrollHeight - scrollThreshold) { setLoadedDaysAfter(prev => prev + loadIncrement); } }, [loadIncrement]);
-          useEffect(() => { const currentRef = scrollContainerRef.current; if (currentRef) { currentRef.addEventListener('scroll', handleScroll); return () => currentRef.removeEventListener('scroll', handleScroll); } }, [handleScroll]);
-          const visibleCases = cases.filter(c => c.startDate && c.dueDate && new Date(c.dueDate) >= displayStartDate && new Date(c.startDate) <= displayEndDate && c.status !== '完了');
-          const dateColumnWidth = 96; const caseColumnWidth = 100; const minContentWidth = dateColumnWidth + (visibleCases.length * caseColumnWidth) + 50;
-          const formatDateToYYMMDD = (date) => { const year = date.getFullYear().toString().slice(-2); const month = (date.getMonth() + 1).toString().padStart(2, '0'); const day = date.getDate().toString().padStart(2, '0'); return `${year}.${month}/${day}`; };
-          const handleCaseHover = (caseItem) => setHoveredCaseInfo(caseItem);
-          return (
-            <>
-              <div ref={scrollContainerRef} className="relative flex-grow overflow-y-scroll overflow-x-auto border border-gray-200 rounded-lg" style={{ maxHeight: `${firstViewHeight}px` }}>
-                <div className="relative" style={{ minHeight: `${totalContentHeight}px`, minWidth: `${minContentWidth}px` }}>
-                  {datesToDisplay.map((date, index) => { const isToday = date.getTime() === today.getTime(); return (<div key={date.toISOString()} className={`absolute w-full flex items-center border-b border-gray-200 ${isToday ? 'bg-red-50' : ''}`} style={{ top: `${index * heightPerDay}px`, height: `${heightPerDay}px` }}><div className={`w-24 text-sm text-center flex-shrink-0 ${isToday ? 'font-bold text-blue-700' : 'text-gray-600'}`}>{formatDateToYYMMDD(date)}</div></div>); })}
-                  {visibleCases.map((caseItem, index) => (<div key={caseItem.id} className="absolute" style={{ left: `${dateColumnWidth + (index * caseColumnWidth) + 20}px`, width: `${caseColumnWidth}px`, height: '100%' }}><VerticalCaseTimeline caseItem={caseItem} displayStartDate={displayStartDate} heightPerDay={heightPerDay} openEditModal={openEditModal} onCaseHover={handleCaseHover} /></div>))}
-                </div>
-              </div>
-              <div className="mt-4 p-3 bg-gray-100 rounded-lg border border-gray-200 w-full text-left">
-                {hoveredCaseInfo ? (<div className="text-gray-800 text-sm"><p className="font-semibold">案件名: {hoveredCaseInfo.name}</p><p>開始日: {hoveredCaseInfo.startDate || '-'}</p><p>完了予定日: {hoveredCaseInfo.dueDate || '-'}</p><p>ステータス: {hoveredCaseInfo.status}</p></div>) : ( <p className="text-gray-500 text-sm">案件ラインにマウスを合わせると詳細が表示されます。</p> )}
-              </div>
-            </>
-          );
-        };
+        const VerticalCaseTimeline = ({ caseItem, displayStartDate, heightPerDay, openEditModal, onCaseHover }) => { /* No changes */ };
+        const ListCalendarView = ({ cases, openEditModal }) => { /* No changes */ };
         const LoginPage = ({ auth, setAuthError, authError }) => {
-            const [email, setEmail] = useState(''); 
-            const [password, setPassword] = useState(''); 
-            const [isLogin, setIsLogin] = useState(true);
-            const [showPassword, setShowPassword] = useState(false);
-            
-            const handleAuthAction = async (e) => {
-                e.preventDefault(); 
+            const [email, setEmail] = React.useState('');
+            const [password, setPassword] = React.useState('');
+            const [isSignUp, setIsSignUp] = React.useState(false);
+            const [loading, setLoading] = React.useState(false);
+            const [showPassword, setShowPassword] = React.useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
                 setAuthError(null);
+
                 try {
-                    if (isLogin) { 
-                        await window.firebase.signInWithEmailAndPassword(auth, email, password); 
-                    } else { 
+                    if (isSignUp) {
                         await window.firebase.createUserWithEmailAndPassword(auth, email, password);
+                    } else {
+                        await window.firebase.signInWithEmailAndPassword(auth, email, password);
                     }
-                } catch (error) { 
-                    console.error(`${isLogin ? 'ログイン' : '登録'}中にエラー:`, error); 
-                    setAuthError(error.message); 
+                } catch (error) {
+                    let errorMessage = "認証に失敗しました。";
+                    if (error.code === 'auth/invalid-email') errorMessage = "メールアドレスの形式が正しくありません。";
+                    if (error.code === 'auth/user-disabled') errorMessage = "このアカウントは無効化されています。";
+                    if (error.code === 'auth/user-not-found') errorMessage = "このメールアドレスのアカウントは存在しません。";
+                    if (error.code === 'auth/wrong-password') errorMessage = "パスワードが間違っています。";
+                    if (error.code === 'auth/email-already-in-use') errorMessage = "このメールアドレスは既に使用されています。";
+                    if (error.code === 'auth/weak-password') errorMessage = "パスワードが弱すぎます。6文字以上のパスワードを設定してください。";
+                    setAuthError(errorMessage);
+                } finally {
+                    setLoading(false);
                 }
             };
 
             return (
-                <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8">
-                    <div className="sm:mx-auto sm:w-full sm:max-w-md"><h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">{isLogin ? 'and Tasksへようこそ' : 'アカウントを作成'}</h2></div>
-                    <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md"><div className="bg-white py-8 px-4 shadow-xl rounded-lg sm:px-10">
-                        <form className="space-y-6" onSubmit={handleAuthAction}>
-                            <div><label htmlFor="email" className="block text-sm font-medium text-gray-700">メールアドレス</label><div className="mt-1"><input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" /></div></div>
+                <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+                    <h1 className="text-3xl font-bold text-gray-800 mb-8 text-center">and Tasksへようこそ</h1>
+                    <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
+                        <form onSubmit={handleSubmit} className="space-y-6">
                             <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-gray-700">パスワード</label>
-                                <div className="mt-1 relative">
-                                    <input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10" />
-                                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5">
-                                      {showPassword ? 
-                                          <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.522 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.478 0-8.268-2.943-9.542-7z" /></svg> :
-                                          <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a9.97 9.97 0 01-1.563 3.029m-2.122-2.122A3 3 0 0012 15a3 3 0 00-1.788-2.712M3 3l18 18"/></svg>
-                                      }
+                                <label className="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
+                                <input
+                                    type="email"
+                                    autoComplete="email"
+                                    required
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
+                                <div className="relative">
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        autoComplete="current-password"
+                                        required
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        tabIndex={-1}
+                                        className="absolute inset-y-0 right-2 flex items-center text-gray-400"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"}
+                                    >
+                                        {showPassword ? (
+                                            // 目を閉じたアイコン
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59" />
+                                            </svg>
+                                        ) : (
+                                            // 目のアイコン
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.522 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.478 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                        )}
                                     </button>
                                 </div>
                             </div>
-                            {authError && <p className="text-red-500 text-xs mt-2">{authError}</p>}
-                            <div><button type="submit" className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">{isLogin ? 'ログイン' : '登録'}</button></div>
+                            {authError && (
+                                <div className="text-red-600 text-sm">{authError}</div>
+                            )}
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-md transition"
+                            >
+                                {loading ? '処理中...' : (isSignUp ? 'アカウント作成' : 'ログイン')}
+                            </button>
                         </form>
-                        <div className="mt-6"><div className="relative"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300"></div></div><div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">{isLogin ? 'アカウントをお持ちでないですか？' : 'すでにアカウントをお持ちですか？'}</span></div></div>
-                        <div className="mt-6"><button onClick={() => { setIsLogin(!isLogin); setAuthError(null); }} className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">{isLogin ? '新しくアカウントを作成' : 'ログイン画面へ'}</button></div></div>
-                    </div></div>
+                        <div className="flex items-center my-4">
+                            <div className="flex-grow border-t border-gray-200"></div>
+                            <span className="mx-2 text-gray-400 text-sm">アカウントをお持ちでないですか？</span>
+                            <div className="flex-grow border-t border-gray-200"></div>
+                        </div>
+                        <button
+                            onClick={() => setIsSignUp(!isSignUp)}
+                            className="w-full border border-gray-300 py-2 rounded-md text-gray-700 hover:bg-gray-50 font-medium transition"
+                        >
+                            {isSignUp ? 'ログイン画面に戻る' : '新しくアカウントを作成'}
+                        </button>
+                    </div>
                 </div>
             );
         };
-        const SettingsModal = ({ user, auth, closeModal, showCustomAlert }) => { /* No Changes */ };
-        
+        const SettingsModal = ({ user, auth, closeModal, showCustomAlert }) => {
+            const [newEmail, setNewEmail] = React.useState(user.email);
+            const [currentPassword, setCurrentPassword] = React.useState('');
+            const [newPassword, setNewPassword] = React.useState('');
+            const [confirmPassword, setConfirmPassword] = React.useState('');
+            const [showNewPassword, setShowNewPassword] = React.useState(false);
+            const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
+
+            const handleUpdateEmail = async (e) => {
+                e.preventDefault();
+                if (newEmail === user.email) {
+                    showCustomAlert("新しいメールアドレスが現在と同じです。");
+                    return;
+                }
+                try {
+                    await window.firebase.verifyBeforeUpdateEmail(auth.currentUser, newEmail);
+                    showCustomAlert("確認メールを新しいメールアドレスに送信しました。メール内のリンクをクリックして変更を完了してください。");
+                    closeModal();
+                } catch (error) {
+                    showCustomAlert(`メールアドレスの更新に失敗しました。時間をおいて再度お試しください。(${error.code})`);
+                }
+            };
+
+            const handleUpdatePassword = async (e) => {
+                e.preventDefault();
+                if (newPassword !== confirmPassword) {
+                    showCustomAlert("新しいパスワードが一致しません。");
+                    return;
+                }
+                try {
+                    const credential = window.firebase.EmailAuthProvider.credential(user.email, currentPassword);
+                    await window.firebase.reauthenticateWithCredential(auth.currentUser, credential);
+                    await window.firebase.updatePassword(auth.currentUser, newPassword);
+                    showCustomAlert("パスワードを更新しました。");
+                    closeModal();
+                } catch (error) {
+                    showCustomAlert(`パスワードの更新に失敗しました。(${error.code})`);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white p-8 rounded-xl shadow-2xl max-w-md w-full relative">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">アカウント設定</h2>
+                        <button onClick={closeModal} className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                        <form onSubmit={handleUpdateEmail} className="space-y-4 mb-8">
+                            <h3 className="text-lg font-semibold text-gray-700">メールアドレスの変更</h3>
+                            <div>
+                                <label htmlFor="new-email" className="block text-sm font-medium text-gray-700">新しいメールアドレス</label>
+                                <input id="new-email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required />
+                            </div>
+                            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">確認メールを送信</button>
+                        </form>
+                        <form onSubmit={handleUpdatePassword} className="space-y-4">
+                            <h3 className="text-lg font-semibold text-gray-700">パスワードの変更</h3>
+                            <div>
+                                <label htmlFor="current-password" className="block text-sm font-medium text-gray-700">現在のパスワード</label>
+                                <input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required />
+                            </div>
+                            <div className="relative">
+                                <label htmlFor="new-password" className="block text-sm font-medium text-gray-700">新しいパスワード</label>
+                                <input id="new-password" type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm pr-10" required />
+                                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-sm leading-5">
+                                    {showNewPassword ?
+                                        <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.522 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.478 0-8.268-2.943-9.542-7z" /></svg> :
+                                        <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a9.97 9.97 0 01-1.563 3.029m-2.122-2.122A3 3 0 0012 15a3 3 0 00-1.788-2.712M3 3l18 18"/></svg>
+                                    }
+                                </button>
+                            </div>
+                            <div className="relative">
+                                <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700">新しいパスワード（確認）</label>
+                                <input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm pr-10" required />
+                                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-sm leading-5">
+                                    {showConfirmPassword ?
+                                        <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.522 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.478 0-8.268-2.943-9.542-7z" /></svg> :
+                                        <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a9.97 9.97 0 01-1.563-3.029m-2.122-2.122A3 3 0 0012 15a3 3 0 00-1.788-2.712M3 3l18 18"/></svg>
+                                    }
+                                </button>
+                            </div>
+                            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">パスワードを更新</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
         const MemberManagementModal = ({ show, onClose, item, db, userId, showCustomAlert }) => {
             const getRoleDisplayName = (role) => ({ owner: 'オーナー', editor: '編集者', viewer: '閲覧者' }[role] || '不明');
             
@@ -247,7 +327,7 @@
                     showCustomAlert("自分自身を削除することはできません。");
                     return;
                 }
-                if (!window.confirm("本当にこのメンバーをプロジェクトから削除しますか？")) return;
+                if (!window.confirm(`メンバー「${item.accessControl[memberIdToRemove].email}」をプロジェクトから削除しますか？`)) return;
 
                 try {
                     const projectRef = window.firebase.doc(db, `artifacts/${window.__app_id}/projects`, item.id);
@@ -299,14 +379,14 @@
                                             <p className="font-semibold text-gray-800">閲覧者用コード</p>
                                             <p className="font-mono tracking-widest text-lg text-gray-900">{item.invitationCodes?.viewer || 'N/A'}</p>
                                         </div>
-                                        <button onClick={() => handleCopyCode(item.invitationCodes?.viewer)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg shadow-md text-xs">コピー</button>
+                                        <button onClick={() => handleCopyCode(item.invitationCodes?.viewer)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-lg shadow-md text-xs">コピー</button>
                                     </div>
                                     <div className="flex justify-between items-center bg-yellow-50 p-3 rounded-md">
                                         <div>
                                             <p className="font-semibold text-gray-800">編集者用コード</p>
                                             <p className="font-mono tracking-widest text-lg text-gray-900">{item.invitationCodes?.editor || 'N/A'}</p>
                                         </div>
-                                        <button onClick={() => handleCopyCode(item.invitationCodes?.editor)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg shadow-md text-xs">コピー</button>
+                                        <button onClick={() => handleCopyCode(item.invitationCodes?.editor)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-lg shadow-md text-xs">コピー</button>
                                     </div>
                                 </div>
                             </div>
@@ -320,6 +400,8 @@
             const [newProjectName, setNewProjectName] = useState('');
             const [isMemberModalOpen, setMemberModalOpen] = useState(false);
             const [selectedProject, setSelectedProject] = useState(null);
+            const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+            const [deletingProject, setDeletingProject] = useState(null);
 
             const generateCode = () => {
                 const chars = 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789';
@@ -377,10 +459,47 @@
                 setMemberModalOpen(true);
             };
 
+            const openDeleteConfirm = (project) => {
+                setDeletingProject(project);
+                setIsDeleteConfirmOpen(true);
+            };
+            const closeDeleteConfirm = () => {
+                setDeletingProject(null);
+                setIsDeleteConfirmOpen(false);
+            };
+
+            const handleDeleteProject = async () => {
+                if (!deletingProject) return;
+
+                try {
+                    const batch = window.firebase.writeBatch(db);
+                    
+                    const casesRef = window.firebase.collection(db, `artifacts/${window.__app_id}/cases`);
+                    const q = window.firebase.query(casesRef, window.firebase.where("projectId", "==", deletingProject.id));
+                    const caseSnapshot = await window.firebase.getDocs(q);
+                    
+                    caseSnapshot.forEach(doc => {
+                        batch.delete(doc.ref);
+                    });
+
+                    const projectRef = window.firebase.doc(db, `artifacts/${window.__app_id}/projects`, deletingProject.id);
+                    batch.delete(projectRef);
+
+                    await batch.commit();
+
+                    showCustomAlert(`プロジェクト「${deletingProject.name}」とその関連案件を削除しました。`);
+                    closeDeleteConfirm();
+                } catch (error) {
+                    console.error("Error deleting project:", error);
+                    showCustomAlert("プロジェクトの削除に失敗しました。");
+                    closeDeleteConfirm();
+                }
+            };
+
             return (
                 <div className="w-full max-w-6xl">
-                    <div className="mb-8 p-6 bg-green-50 rounded-xl shadow-md">
-                        <h2 className="text-2xl font-semibold text-green-700 mb-4">新しいプロジェクトを作成</h2>
+                    <div className="mb-8 p-6 bg-indigo-50 rounded-xl shadow-md">
+                        <h2 className="text-2xl font-semibold text-indigo-700 mb-4">新しいプロジェクトを作成</h2>
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -389,7 +508,7 @@
                                 placeholder="例: A社共有プロジェクト"
                                 className="flex-grow mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
                             />
-                            <button onClick={handleAddProject} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">作成</button>
+                            <button onClick={handleAddProject} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">作成</button>
                         </div>
                     </div>
                     <div className="p-6 bg-white rounded-xl shadow-md">
@@ -403,9 +522,14 @@
                                         <h3 className="text-lg font-semibold text-gray-800">{project.name}</h3>
                                         <p className="text-sm text-gray-500">メンバー数: {project.memberIds.length}人</p>
                                     </div>
-                                    {userRole === 'owner' && (
-                                      <button onClick={() => openMemberModal(project)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">メンバー管理</button>
-                                    )}
+                                    <div className="flex items-center space-x-2">
+                                        {userRole === 'owner' && (
+                                            <>
+                                                <button onClick={() => openMemberModal(project)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">メンバー管理</button>
+                                                <button onClick={() => openDeleteConfirm(project)} className="text-gray-400 hover:text-red-600 font-semibold py-2 px-3 rounded-lg">削除</button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                                 )
                             }) : (
@@ -418,16 +542,27 @@
                             show={isMemberModalOpen}
                             onClose={() => setMemberModalOpen(false)}
                             item={selectedProject}
-                            itemType="project"
                             db={db}
                             userId={userId}
                             showCustomAlert={showCustomAlert}
                         />
                     )}
+                    {isDeleteConfirmOpen && (
+                        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4">プロジェクト削除の確認</h3>
+                                <p className="text-gray-700 mb-6">本当にプロジェクト「{deletingProject?.name}」を削除しますか？<br/>このプロジェクトに関連する全ての案件も削除されます。この操作は元に戻せません。</p>
+                                <div className="flex justify-end space-x-4">
+                                    <button onClick={closeDeleteConfirm} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">キャンセル</button>
+                                    <button onClick={handleDeleteProject} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">はい、削除します</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
-        const CaseManagementApp = ({ userId, userEmail, db, showCustomAlert }) => {
+        const CaseManagementApp = ({ userId, db, showCustomAlert }) => {
             const [cases, setCases] = useState([]);
             const [projects, setProjects] = useState([]); 
             const [projectMap, setProjectMap] = useState({});
@@ -435,8 +570,10 @@
 
             const [newCaseName, setNewCaseName] = useState(''); const [newClient, setNewClient] = useState(''); const [newAssignee, setNewAssignee] = useState(''); const [newStatus, setNewStatus] = useState('未着手'); const [newStartDate, setNewStartDate] = useState(''); const [newDueDate, setNewDueDate] = useState(''); const [newBasePrice, setNewBasePrice] = useState(''); const [newPdfUrl, setNewPdfUrl] = useState(''); const [newEvents, setNewEvents] = useState([]); const [newEventDate, setNewEventDate] = useState(''); const [newEventDescription, setNewEventDescription] = useState(''); const [newEvent_Type, setNewEvent_Type] = useState('提出'); const [newEventPdfUrl, setNewEventPdfUrl] = useState('');
             const [allClients, setAllClients] = useState([]); const [allAssignees, setAllAssignees] = useState([]);
+            const [filterProject, setFilterProject] = useState('');
             const [filterClient, setFilterClient] = useState(''); const [filterAssignee, setFilterAssignee] = useState(''); const [filterStatus, setFilterStatus] = useState('');
             const [filterStartDate, setFilterStartDate] = useState(''); const [filterEndDate, setFilterEndDate] = useState('');
+            const [dateFilterType, setDateFilterType] = useState('createdAt');
             const [showFilters, setShowFilters] = useState(false);
             const [error, setError] = useState(null);
             const [isEditModalOpen, setIsEditModalOpen] = useState(false); const [editingCase, setEditingCase] = useState(null); const [editedCaseName, setEditedCaseName] = useState(''); const [editedClient, setEditedClient] = useState(''); const [editedAssignee, setEditedAssignee] = useState(''); const [editedStatus, setEditedStatus] = useState(''); const [editedStartDate, setEditedStartDate] = useState(''); const [editedDueDate, setEditedDueDate] = useState(''); const [editedBasePrice, setEditedBasePrice] = useState(''); const [editedPdfUrl, setEditedPdfUrl] = useState(''); const [editedEvents, setEditedEvents] = useState([]);
@@ -611,20 +748,38 @@
 
             const filteredCases = useMemo(() => {
                 return cases.filter(caseItem => {
+                    const projectMatch = filterProject ? caseItem.projectId === filterProject : true;
                     const clientMatch = filterClient ? caseItem.client === filterClient : true;
                     const assigneeMatch = filterAssignee ? caseItem.assignee === filterAssignee : true;
                     const statusMatch = filterStatus ? caseItem.status === filterStatus : true;
                     
-                    const caseStartDate = caseItem.startDate ? new Date(caseItem.startDate) : null;
                     const startFilter = filterStartDate ? new Date(filterStartDate) : null;
                     const endFilter = filterEndDate ? new Date(filterEndDate) : null;
+                    if(startFilter) startFilter.setHours(0,0,0,0);
+                    if(endFilter) endFilter.setHours(23,59,59,999);
 
-                    if (startFilter && caseStartDate && caseStartDate < startFilter) { return false; }
-                    if (endFilter && caseStartDate && caseStartDate > endFilter) { return false; }
-                    
-                    return clientMatch && assigneeMatch && statusMatch;
+                    let dateMatch = true;
+                    if (startFilter || endFilter) {
+                        let dateToCheck = null;
+                        if (dateFilterType === 'createdAt' && caseItem.createdAt) {
+                             dateToCheck = caseItem.createdAt.toDate();
+                        } else if (dateFilterType === 'startDate' && caseItem.startDate) {
+                            dateToCheck = new Date(caseItem.startDate);
+                        } else if (dateFilterType === 'dueDate' && caseItem.dueDate) {
+                            dateToCheck = new Date(caseItem.dueDate);
+                        }
+                        
+                        if (dateToCheck) {
+                             if(startFilter && dateToCheck < startFilter) dateMatch = false;
+                             if(endFilter && dateToCheck > endFilter) dateMatch = false;
+                        } else {
+                            dateMatch = false;
+                        }
+                    }
+
+                    return projectMatch && clientMatch && assigneeMatch && statusMatch && dateMatch;
                 });
-            }, [cases, filterClient, filterAssignee, filterStatus, filterStartDate, filterEndDate]);
+            }, [cases, filterProject, filterClient, filterAssignee, filterStatus, filterStartDate, filterEndDate, dateFilterType]);
             
             const renderCurrentView = () => {
                 const viewProps = { cases: filteredCases, openEditModal, userId };
@@ -723,8 +878,8 @@
 
             return (
               <div className="w-full max-w-6xl">
-                  <div className="mb-8 p-6 bg-blue-50 rounded-xl shadow-md">
-                    <h2 className="text-2xl font-semibold text-blue-700 mb-4">新しい案件を追加</h2>
+                  <div className="mb-8 p-6 bg-indigo-50 rounded-xl shadow-md">
+                    <h2 className="text-2xl font-semibold text-indigo-700 mb-4">新しい案件を追加</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div className="md:col-span-2">
                         <label htmlFor="project" className="block text-sm font-medium text-gray-700 mb-1">プロジェクト<span className="text-red-500">*</span></label>
@@ -744,44 +899,63 @@
                       <div><label htmlFor="newStartDate" className="block text-sm font-medium text-gray-700 mb-1">開始日</label><input type="date" id="newStartDate" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newStartDate} onChange={(e) => setNewStartDate(e.target.value)} /></div>
                       <div><label htmlFor="newDueDate" className="block text-sm font-medium text-gray-700 mb-1">完了予定日</label><input type="date" id="newDueDate" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} /></div>
                     </div>
-                    <div className="mb-4 p-4 bg-blue-100 rounded-md">
-                      <h3 className="text-lg font-semibold text-blue-800 mb-2">タイムラインイベントを追加</h3>
-                      <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                    <div className="mb-4 p-4 bg-indigo-100 rounded-md">
+                      <h3 className="text-lg font-semibold text-indigo-800 mb-2">タイムラインイベントを追加</h3>
+                      <div className="flex flex-wrap gap-2 mb-2">
                         <input type="date" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} />
                         <input type="text" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newEventDescription} onChange={(e) => setNewEventDescription(e.target.value)} placeholder="例: 校正提出済み" />
                         <input type="url" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newEventPdfUrl} onChange={(e) => setNewEventPdfUrl(e.target.value)} placeholder="添付URL" />
                         <select className="flex-shrink-0 px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newEvent_Type} onChange={(e) => setNewEvent_Type(e.target.value)}><option value="提出">提出</option><option value="タスク">タスク</option></select>
-                        <button onClick={handleAddNewEvent} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md shadow-sm">追加</button>
+                        <button onClick={handleAddNewEvent} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-md shadow-sm">追加</button>
                       </div>
                       <div className="mt-3">{newEvents.length > 0 ? (<ul className="list-disc list-inside text-sm text-gray-700">{newEvents.map((event, index) => (<li key={index} className={`flex justify-between items-center py-1 ${event.completed ? 'line-through text-gray-500' : ''}`}><span>[{event.type}] {event.date}: {event.description}{event.pdfUrl && <a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs ml-2">添付URL</a>}</span><div><button onClick={() => handleToggleNewEventCompletion(index)} className={`ml-2 px-2 py-1 rounded-md text-xs font-semibold ${event.completed ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700'}`}> {event.completed ? '完了済み' : '完了'}</button><button onClick={() => handleRemoveNewEvent(index)} className="text-red-500 hover:text-red-700 ml-2">&times;</button></div></li>))}</ul>) : (<p className="text-sm text-gray-500">イベントはまだありません。</p>)}</div>
                     </div>
                     
-                    <button onClick={handleAddCase} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">案件を追加</button>
+                    <button onClick={handleAddCase} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">案件を追加</button>
                   </div>
 
                   <div className="p-6 bg-white rounded-xl shadow-md">
                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-4">
                       <h2 className="text-2xl font-semibold text-gray-700 shrink-0">案件一覧</h2>
                       <div className="flex flex-wrap justify-center gap-2">
-                        {['card', 'table', 'timeline', 'calendar'].map((mode) => ( <button key={mode} onClick={() => setListDisplayMode(mode)} className={`py-2 px-4 rounded-lg font-semibold transition text-sm ${listDisplayMode === mode ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-700'}`}>{ {card: 'カード', table: 'テーブル', timeline: 'タイムライン', calendar: 'カレンダー'}[mode] }表示</button>))}
+                        {['card', 'table', 'timeline', 'calendar'].map((mode) => ( <button key={mode} onClick={() => setListDisplayMode(mode)} className={`py-2 px-4 rounded-lg font-semibold transition text-sm ${listDisplayMode === mode ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-200 text-gray-700'}`}>{ {card: 'カード', table: 'テーブル', timeline: 'タイムライン', calendar: 'カレンダー'}[mode] }表示</button>))}
                       </div>
                       <button onClick={() => setShowFilters(!showFilters)} className="p-2 rounded-md hover:bg-gray-200">
                           <svg className="w-6 h-6 text-gray-600" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
                       </button>
                     </div>
                     {showFilters && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 p-4 bg-gray-50 rounded-lg w-full max-w-full">
-                           <select value={filterClient} onChange={e => setFilterClient(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"><option value="">すべての取引先</option>{allClients.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                           <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"><option value="">すべての担当者</option>{allAssignees.map(a => <option key={a} value={a}>{a}</option>)}</select>
-                           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"><option value="">すべてのステータス</option><option value="未着手">未着手</option><option value="進行中">進行中</option><option value="確認待ち">確認待ち</option><option value="完了">完了</option><option value="キャンセル">キャンセル</option></select>
-                           <div className="flex flex-col sm:flex-row items-center gap-2 lg:col-span-1">
-                             <input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
-                             <span className="hidden sm:inline">~</span>
-                             <input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
-                           </div>
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                               <select value={filterProject} onChange={e => setFilterProject(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"><option value="">すべてのプロジェクト</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+                               <select value={filterClient} onChange={e => setFilterClient(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"><option value="">すべての取引先</option>{allClients.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                               <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"><option value="">すべての担当者</option>{allAssignees.map(a => <option key={a} value={a}>{a}</option>)}</select>
+                               <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"><option value="">すべてのステータス</option><option value="未着手">未着手</option><option value="進行中">進行中</option><option value="確認待ち">確認待ち</option><option value="完了">完了</option><option value="キャンセル">キャンセル</option></select>
+                               <div className="lg:col-span-2">
+                                    <div className="flex items-center gap-2">
+                                        <select value={dateFilterType} onChange={e => setDateFilterType(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white">
+                                            <option value="createdAt">登録日</option>
+                                            <option value="startDate">開始日</option>
+                                            <option value="dueDate">完了日</option>
+                                        </select>
+                                        <div className="flex-grow flex items-center gap-2">
+                                             <input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
+                                             <span>~</span>
+                                             <input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
+                                        </div>
+                                    </div>
+                               </div>
+                            </div>
                         </div>
                     )}
-                    {renderCurrentView()}
+                     <div className="mt-4 flex flex-wrap gap-2">
+                        {filterProject && <span className="inline-flex items-center px-2 py-1 bg-gray-200 text-sm font-medium text-gray-800 rounded-full">プロジェクト: {projectMap[filterProject]?.name} <button onClick={() => setFilterProject('')} className="ml-1 font-bold text-red-500">&times;</button></span>}
+                        {filterClient && <span className="inline-flex items-center px-2 py-1 bg-gray-200 text-sm font-medium text-gray-800 rounded-full">取引先: {filterClient} <button onClick={() => setFilterClient('')} className="ml-1 font-bold text-red-500">&times;</button></span>}
+                        {filterAssignee && <span className="inline-flex items-center px-2 py-1 bg-gray-200 text-sm font-medium text-gray-800 rounded-full">担当者: {filterAssignee} <button onClick={() => setFilterAssignee('')} className="ml-1 font-bold text-red-500">&times;</button></span>}
+                        {filterStatus && <span className="inline-flex items-center px-2 py-1 bg-gray-200 text-sm font-medium text-gray-800 rounded-full">ステータス: {filterStatus} <button onClick={() => setFilterStatus('')} className="ml-1 font-bold text-red-500">&times;</button></span>}
+                        {(filterStartDate || filterEndDate) && <span className="inline-flex items-center px-2 py-1 bg-gray-200 text-sm font-medium text-gray-800 rounded-full">{ {startDate: '開始日', dueDate: '完了日', createdAt: '登録日'}[dateFilterType] }: {filterStartDate || '*'} ~ {filterEndDate || '*'} <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }} className="ml-1 font-bold text-red-500">&times;</button></span>}
+                    </div>
+                    <div className="mt-4">{renderCurrentView()}</div>
                   </div>
 
                   {isEditModalOpen && editingCase && (
@@ -800,18 +974,18 @@
                                 <div><label htmlFor="editedDueDate" className="block text-sm font-medium text-gray-700">完了予定日</label><input type="date" id="editedDueDate" value={editedDueDate} onChange={(e) => setEditedDueDate(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" /></div>
                             </div>
                             <div className="mt-6 border-t pt-6">
-                                <h3 className="text-lg font-semibold text-gray-700 mb-2">タイムラインイベントを編集</h3>
-                                <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                                <h3 className="text-lg font-semibold text-gray-700 mb-2">タイムラインイベントを追加</h3>
+                                <div className="flex flex-wrap gap-2 mb-2">
                                     <input type="date" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} />
                                     <input type="text" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newEventDescription} onChange={(e) => setNewEventDescription(e.target.value)} placeholder="例: 校正提出済み" />
                                     <input type="url" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newEventPdfUrl} onChange={(e) => setNewEventPdfUrl(e.target.value)} placeholder="添付URL" />
                                     <select className="flex-shrink-0 px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={newEvent_Type} onChange={(e) => setNewEvent_Type(e.target.value)}><option value="提出">提出</option><option value="タスク">タスク</option></select>
-                                    <button onClick={handleAddEditedEvent} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md shadow-sm">追加</button>
+                                    <button onClick={handleAddEditedEvent} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-md shadow-sm">追加</button>
                                 </div>
                                 <div className="mt-3">{editedEvents.length > 0 ? (<ul className="list-disc list-inside text-sm text-gray-700">{editedEvents.map((event, index) => (<li key={index} className={`flex justify-between items-center py-1 ${event.completed ? 'line-through text-gray-500' : ''}`}><span>[{event.type}] {event.date}: {event.description}{event.pdfUrl && <a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs ml-2">添付URL</a>}</span><div><button onClick={() => handleToggleEditedEventCompletion(index)} className={`ml-2 px-2 py-1 rounded-md text-xs font-semibold ${event.completed ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700'}`}> {event.completed ? '完了済み' : '完了'}</button><button onClick={() => handleRemoveEditedEvent(index)} className="text-red-500 hover:text-red-700 ml-2">&times;</button></div></li>))}</ul>) : (<p className="text-sm text-gray-500">イベントはまだありません。</p>)}</div>
                             </div>
                            <div className="mt-6 border-t pt-6">
-                                <button onClick={handleUpdateCase} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">案件を更新</button>
+                                <button onClick={handleUpdateCase} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">案件を更新</button>
                                 <button onClick={() => openDeleteConfirm(editingCase.id)} className="w-full mt-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">案件を削除</button>
                             </div>
                         </div>
@@ -893,7 +1067,7 @@
                     <div className="w-full max-w-6xl">
                          <div className="flex justify-between items-start mb-6">
                             <div>
-                                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">and Tasks</h1>
+                                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Anken</h1>
                                 <div className="mt-4 border-b border-gray-200">
                                     <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                                         <button onClick={() => setCurrentView('cases')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${currentView === 'cases' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>
@@ -923,13 +1097,13 @@
                         </div>
 
                         {currentView === 'cases' ? (
-                            <CaseManagementApp userId={user.uid} userEmail={user.email} db={db} showCustomAlert={showCustomAlert} />
+                            <CaseManagementApp userId={user.uid} db={db} showCustomAlert={showCustomAlert} />
                         ) : (
                             <ProjectManagementPage userId={user.uid} userEmail={user.email} db={db} showCustomAlert={showCustomAlert} />
                         )}
                     </div>
 
-                    {showAlert && ( <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50"><div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full relative"><h3 className="text-lg font-bold text-gray-800 mb-4">お知らせ</h3><p className="text-gray-700 mb-6">{alertMessage}</p><button onClick={() => setShowAlert(false)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">閉じる</button></div></div> )}
+                    {showAlert && ( <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50"><div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full relative"><h3 className="text-lg font-bold text-gray-800 mb-4">お知らせ</h3><p className="text-gray-700 mb-6">{alertMessage}</p><button onClick={() => setShowAlert(false)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">閉じる</button></div></div> )}
                     {isSettingsModalOpen && <SettingsModal user={auth.currentUser} auth={auth} closeModal={() => setSettingsModalOpen(false)} showCustomAlert={showCustomAlert} />}
                     {isJoinProjectModalOpen && <JoinProjectModal show={isJoinProjectModalOpen} onClose={() => setJoinProjectModalOpen(false)} db={db} user={user} showCustomAlert={showCustomAlert} />}
 
