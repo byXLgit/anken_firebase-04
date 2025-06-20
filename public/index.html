@@ -111,8 +111,70 @@
             </div>
           );
         };
-        const VerticalCaseTimeline = ({ caseItem, displayStartDate, heightPerDay, openEditModal, onCaseHover }) => { /* No changes */ };
-        const ListCalendarView = ({ cases, openEditModal }) => { /* No changes */ };
+        const VerticalCaseTimeline = ({ caseItem, displayStartDate, heightPerDay, openEditModal, onCaseHover }) => {
+          const caseStartDate = new Date(caseItem.startDate); const caseDueDate = new Date(caseItem.dueDate);
+          const effectiveStartDate = new Date(Math.max(caseStartDate.getTime(), displayStartDate.getTime()));
+          const effectiveDueDate = new Date(caseDueDate.getTime());
+          const startOffsetDays = (effectiveStartDate.getTime() - displayStartDate.getTime()) / (1000 * 60 * 60 * 24);
+          const topPx = Math.max(0, startOffsetDays * heightPerDay);
+          const durationDays = (effectiveDueDate.getTime() - effectiveStartDate.getTime()) / (1000 * 60 * 60 * 24);
+          const heightPx = Math.max(2, durationDays * heightPerDay);
+          if (topPx < 0 && (topPx + heightPx < 0)) return null;
+          const sortedEvents = [...(caseItem.events || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const getEventTypeShapeClass = (event) => (event.type === 'タスク' ? '' : 'rounded-full');
+          const getEventColorClass = (event) => { if (event.completed) return 'bg-green-500'; switch (event.type) { case '予定': case '提出': return 'bg-yellow-500'; case 'タスク': return 'bg-red-500'; case '完了': return 'bg-green-500'; default: return 'bg-purple-600'; } };
+          const [activeTooltipIndex, setActiveTooltipIndex] = useState(null);
+          return (
+            <div className="absolute w-0.5 bg-gray-800 flex flex-col items-center cursor-pointer" style={{ top: `${topPx}px`, height: `${heightPx}px` }} onClick={() => openEditModal(caseItem)} onMouseEnter={() => onCaseHover(caseItem)} onMouseLeave={() => onCaseHover(null)}>
+              <div className="absolute w-3 h-3 bg-black rounded-full z-20" style={{ top: '0px', transform: 'translateY(-50%) translateX(-50%)', left: '50%' }}></div>
+              <div className="absolute w-3 h-3 bg-black rounded-full z-20" style={{ bottom: '0px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}></div>
+              {sortedEvents.map((event, eventIdx) => {
+                const eventDate = new Date(event.date);
+                const eventOffsetDays = (eventDate.getTime() - effectiveStartDate.getTime()) / (1000 * 60 * 60 * 24);
+                const eventTopPx = eventOffsetDays * heightPerDay;
+                if (eventTopPx < 0 || eventTopPx > heightPx) return null;
+                return (
+                  <div key={eventIdx} className={`absolute w-3 h-3 z-20 cursor-pointer ${getEventColorClass(event)} ${getEventTypeShapeClass(event)}`} style={{ top: `${eventTopPx}px`, left: '50%', transform: 'translateX(-50%)' }} onMouseEnter={() => setActiveTooltipIndex(eventIdx)} onMouseLeave={() => setActiveTooltipIndex(null)}>
+                    {activeTooltipIndex === eventIdx && (<div className="absolute left-1/2 -translate-x-1/2 mt-2 p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap z-30" style={{ top: '100%' }}><p>{event.date}</p><p>{event.description}</p>{event.pdfUrl && (<p className="text-xs text-gray-400"><a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">PDF</a></p>)}<div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-4 border-b-gray-800"></div></div>)}
+                  </div>);
+              })}
+            </div>
+          );
+        };
+        const ListCalendarView = ({ cases, openEditModal }) => {
+          const scrollContainerRef = useRef(null);
+          const heightPerDay = 20;
+          const [loadedDaysBefore, setLoadedDaysBefore] = useState(15);
+          const [loadedDaysAfter, setLoadedDaysAfter] = useState(15);
+          const loadIncrement = 30;
+          const [hoveredCaseInfo, setHoveredCaseInfo] = useState(null);
+          const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+          const displayStartDate = useMemo(() => { const d = new Date(today); d.setDate(today.getDate() - loadedDaysBefore); return d; }, [today, loadedDaysBefore]);
+          const displayEndDate = useMemo(() => { const d = new Date(today); d.setDate(today.getDate() + loadedDaysAfter); return d; }, [today, loadedDaysAfter]);
+          const datesToDisplay = useMemo(() => { const dates = []; let loopDate = new Date(displayStartDate); while (loopDate <= displayEndDate) { dates.push(new Date(loopDate)); loopDate.setDate(loopDate.getDate() + 1); } return dates; }, [displayStartDate, displayEndDate]);
+          const totalContentHeight = datesToDisplay.length * heightPerDay;
+          const firstViewHeight = 31 * heightPerDay;
+          useEffect(() => { if (scrollContainerRef.current) { const todayIndex = datesToDisplay.findIndex(date => date.getTime() === today.getTime()); if (todayIndex !== -1) { const scrollToY = (todayIndex * heightPerDay) - (scrollContainerRef.current.clientHeight / 2) + (heightPerDay / 2); scrollContainerRef.current.scrollTop = Math.max(0, scrollToY); } } }, [datesToDisplay, today, heightPerDay]);
+          const handleScroll = useCallback(() => { if (!scrollContainerRef.current) return; const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current; const scrollThreshold = 50; if (scrollTop < scrollThreshold) { const oldScrollHeight = scrollHeight; setLoadedDaysBefore(prev => prev + loadIncrement); requestAnimationFrame(() => { if (scrollContainerRef.current) { scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - oldScrollHeight; } }); } if (scrollTop + clientHeight > scrollHeight - scrollThreshold) { setLoadedDaysAfter(prev => prev + loadIncrement); } }, [loadIncrement]);
+          useEffect(() => { const currentRef = scrollContainerRef.current; if (currentRef) { currentRef.addEventListener('scroll', handleScroll); return () => currentRef.removeEventListener('scroll', handleScroll); } }, [handleScroll]);
+          const visibleCases = cases.filter(c => c.startDate && c.dueDate && new Date(c.dueDate) >= displayStartDate && new Date(c.startDate) <= displayEndDate && c.status !== '完了');
+          const dateColumnWidth = 96; const caseColumnWidth = 100; const minContentWidth = dateColumnWidth + (visibleCases.length * caseColumnWidth) + 50;
+          const formatDateToYYMMDD = (date) => { const year = date.getFullYear().toString().slice(-2); const month = (date.getMonth() + 1).toString().padStart(2, '0'); const day = date.getDate().toString().padStart(2, '0'); return `${year}.${month}/${day}`; };
+          const handleCaseHover = (caseItem) => setHoveredCaseInfo(caseItem);
+          return (
+            <>
+              <div ref={scrollContainerRef} className="relative flex-grow overflow-y-scroll overflow-x-auto border border-gray-200 rounded-lg" style={{ maxHeight: `${firstViewHeight}px` }}>
+                <div className="relative" style={{ minHeight: `${totalContentHeight}px`, minWidth: `${minContentWidth}px` }}>
+                  {datesToDisplay.map((date, index) => { const isToday = date.getTime() === today.getTime(); return (<div key={date.toISOString()} className={`absolute w-full flex items-center border-b border-gray-200 ${isToday ? 'bg-red-50' : ''}`} style={{ top: `${index * heightPerDay}px`, height: `${heightPerDay}px` }}><div className={`w-24 text-sm text-center flex-shrink-0 ${isToday ? 'font-bold text-blue-700' : 'text-gray-600'}`}>{formatDateToYYMMDD(date)}</div></div>); })}
+                  {visibleCases.map((caseItem, index) => (<div key={caseItem.id} className="absolute" style={{ left: `${dateColumnWidth + (index * caseColumnWidth) + 20}px`, width: `${caseColumnWidth}px`, height: '100%' }}><VerticalCaseTimeline caseItem={caseItem} displayStartDate={displayStartDate} heightPerDay={heightPerDay} openEditModal={openEditModal} onCaseHover={handleCaseHover} /></div>))}
+                </div>
+              </div>
+              <div className="mt-4 p-3 bg-gray-100 rounded-lg border border-gray-200 w-full text-left">
+                {hoveredCaseInfo ? (<div className="text-gray-800 text-sm"><p className="font-semibold">案件名: {hoveredCaseInfo.name}</p><p>開始日: {hoveredCaseInfo.startDate || '-'}</p><p>完了予定日: {hoveredCaseInfo.dueDate || '-'}</p><p>ステータス: {hoveredCaseInfo.status}</p></div>) : ( <p className="text-gray-500 text-sm">案件ラインにマウスを合わせると詳細が表示されます。</p> )}
+              </div>
+            </>
+          );
+        };
         const LoginPage = ({ auth, setAuthError, authError }) => {
             const [email, setEmail] = React.useState('');
             const [password, setPassword] = React.useState('');
