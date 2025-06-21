@@ -676,6 +676,39 @@
             const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
             const [deletingCaseId, setDeletingCaseId] = useState(null);
             
+            // Icon Components
+            const BuildingIcon = () => (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+            );
+
+            const CalendarIcon = () => (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            );
+
+            const ClockIcon = ({ className = "h-5 w-5 text-gray-400" }) => (
+                <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            );
+
+            const EditIcon = ({className = "h-5 w-5"}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+            );
+
+            const TableHeaderIcon = ({children}) => <div className="flex items-center space-x-2">{children}</div>;
+            const CaseIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>);
+            const StatusIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>);
+            const PriceIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>);
+            const ActionIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>);
+            const TaskCountIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6" /></svg>);
+
+
             useEffect(() => {
               if (projects.length > 0 && !selectedProjectId) {
                 setSelectedProjectId(projects[0].id);
@@ -692,7 +725,6 @@
                     setEditedDueDate(editingCase.dueDate || ''); 
                     setEditedBasePrice(editingCase.basePrice || ''); 
                     setEditedPdfUrl(editingCase.pdfUrl || ''); 
-                    // Ensure events have a reminder object
                     const eventsWithDefaults = (editingCase.events || []).map(e => ({
                         ...e,
                         reminder: e.reminder || { enabled: false, notifyOn: '1_day_before' }
@@ -858,27 +890,88 @@
                 if (cases.length === 0) {
                      return <p className="text-gray-500 text-center py-8">表示できる案件がありません。新しい案件を追加してください。</p>;
                 }
+                 const getStatusClass = (status) => {
+                    switch (status) {
+                        case '完了': return 'bg-green-100 text-green-700';
+                        case '進行中': return 'bg-blue-100 text-blue-700';
+                        case '確認待ち': return 'bg-yellow-100 text-yellow-700';
+                        case 'キャンセル': return 'bg-red-100 text-red-700';
+                        default: return 'bg-gray-100 text-gray-700';
+                    }
+                };
 
                 if (listDisplayMode === 'card') {
                     return (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {filteredCases.map((caseItem) => {
                                 const userRole = caseItem.accessControl?.[userId]?.role;
                                 const canEdit = userRole === 'owner' || userRole === 'editor';
+                                const sortedEvents = (caseItem.events || []).sort((a,b) => new Date(b.date) - new Date(a.date));
+                
                                 return (
-                                    <div key={caseItem.id} className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col">
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-2">{caseItem.name}</h3>
-                                        <p className="text-gray-600 text-sm">取引先: {caseItem.client || '-'}</p>
-                                        <p className="text-gray-600 text-sm">担当者: {caseItem.assignee || '-'}</p>
-                                        <p className="text-gray-600 text-sm">ステータス: <span className={`font-medium ${ caseItem.status === '完了' ? 'text-green-600' : caseItem.status === '進行中' ? 'text-blue-600' : caseItem.status === '確認待ち' ? 'text-yellow-600' : caseItem.status === 'キャンセル' ? 'text-red-600' : 'text-gray-600' }`}>{caseItem.status}</span></p>
-                                        {caseItem.startDate && <p className="text-gray-600 text-xs">開始日: {caseItem.startDate}</p>}
-                                        {caseItem.dueDate && <p className="text-gray-600 text-xs">完了予定日: {caseItem.dueDate}</p>}
-                                        {userRole === 'owner' && caseItem.basePrice > 0 && <p className="text-gray-600 text-xs">基本料金: {caseItem.basePrice.toLocaleString()}円</p>}
-                                        {caseItem.pdfUrl && <p className="text-gray-600 text-xs">添付URL: <a href={caseItem.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">表示</a></p>}
-                                        {caseItem.events && caseItem.events.length > 0 && <div className="mt-2 text-xs text-gray-600"><strong>イベント:</strong><ul className="list-disc list-inside">{caseItem.events.map((event, idx) => (<li key={idx} className={`${event.completed ? 'line-through text-gray-500' : ''}`}>[{event.type}] {event.date}: {event.description}{event.pdfUrl && <a href={event.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs ml-2">添付URL</a>}</li>))}</ul></div>}
+                                    <div key={caseItem.id} className="bg-white p-5 rounded-xl border border-gray-200 flex flex-col space-y-4">
+                                        {/* Card Header */}
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="text-xl font-bold text-gray-800 truncate">{caseItem.name}</h3>
+                                            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusClass(caseItem.status)}`}>{caseItem.status}</span>
+                                        </div>
+                
+                                        {/* Card Body */}
+                                        <div className="space-y-2 text-gray-600">
+                                             {caseItem.client && (
+                                                <div className="flex items-center space-x-2">
+                                                    <BuildingIcon />
+                                                    <span>{caseItem.client}</span>
+                                                </div>
+                                             )}
+                                              {(caseItem.assignee) && (
+                                                <div className="flex items-center space-x-2">
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                  </svg>
+                                                  <span>{caseItem.assignee}</span>
+                                                </div>
+                                             )}
+                                             {(caseItem.startDate || caseItem.dueDate) && (
+                                                <div className="flex items-center space-x-2">
+                                                    <CalendarIcon />
+                                                    <span>{caseItem.startDate || 'N/A'} ~ {caseItem.dueDate || 'N/A'}</span>
+                                                </div>
+                                             )}
+                                        </div>
+                                        
+                                        {/* Events Section */}
+                                        {sortedEvents.length > 0 && (
+                                            <div className="border-t border-gray-200 pt-4 space-y-2">
+                                                <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
+                                                     <ClockIcon />
+                                                     <span>イベント ({sortedEvents.length})</span>
+                                                </div>
+                                                <ul className="space-y-1 pl-1">
+                                                    {sortedEvents.slice(0, 2).map((event, idx) => ( // Show only first 2 events
+                                                        <li key={idx} className={`flex items-start space-x-2 text-sm ${event.completed ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
+                                                            <ClockIcon className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                                            <span>{event.date}: {event.description}</span>
+                                                        </li>
+                                                    ))}
+                                                    {sortedEvents.length > 2 && <li className="text-xs text-gray-500 pl-7">...他{sortedEvents.length - 2}件</li>}
+                                                </ul>
+                                            </div>
+                                        )}
+                
+                                        {/* Card Footer */}
                                         <div className="flex-grow"></div>
-                                        {caseItem.createdAt && <p className="text-gray-500 text-xs mt-auto pt-2">作成日: {new Date(caseItem.createdAt.toDate()).toLocaleString()}</p>}
-                                        {canEdit && <button onClick={() => openEditModal(caseItem)} className="mt-4 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md text-sm">編集</button>}
+                                        <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
+                                             {caseItem.createdAt ? (
+                                                <p className="text-xs text-gray-400">作成: {new Date(caseItem.createdAt.toDate()).toLocaleDateString()}</p>
+                                             ) : <div></div>}
+                                            {canEdit && (
+                                                <button onClick={() => openEditModal(caseItem)} className="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-800">
+                                                    <EditIcon className="h-4 w-4 mr-1"/>
+                                                    編集
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -887,31 +980,39 @@
                 }
                 if (listDisplayMode === 'table') {
                     return (
-                        <div className="w-full overflow-x-auto">
-                            <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                        <div className="w-full overflow-x-auto bg-white rounded-xl border border-gray-200">
+                            <table className="min-w-full">
                                 <thead>
-                                    <tr className="bg-gray-100 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                                        <th className="py-3 px-4 border-b">案件名</th>
-                                        <th className="py-3 px-4 border-b">取引先</th>
-                                        <th className="py-3 px-4 border-b">担当者</th>
-                                        <th className="py-3 px-4 border-b">ステータス</th>
-                                        <th className="py-3 px-4 border-b">基本料金</th>
-                                        <th className="py-3 px-4 border-b">操作</th>
+                                    <tr className="border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                        <th className="py-3 px-4 w-1/3"><TableHeaderIcon><CaseIcon/><span>案件名</span></TableHeaderIcon></th>
+                                        <th className="py-3 px-4"><TableHeaderIcon><StatusIcon/><span>ステータス</span></TableHeaderIcon></th>
+                                        <th className="py-3 px-4"><TableHeaderIcon><TaskCountIcon/><span>タスク数</span></TableHeaderIcon></th>
+                                        <th className="py-3 px-4"><TableHeaderIcon><PriceIcon/><span>基本料金</span></TableHeaderIcon></th>
+                                        <th className="py-3 px-4"><TableHeaderIcon><ActionIcon/><span>操作</span></TableHeaderIcon></th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody className="divide-y divide-gray-200">
                                     {filteredCases.map((caseItem) => {
                                         const userRole = caseItem.accessControl?.[userId]?.role;
                                         const canEdit = userRole === 'owner' || userRole === 'editor';
+                                        const taskCount = caseItem.events?.filter(e => e.type === 'タスク').length || 0;
+
                                         return (
-                                            <tr key={caseItem.id} className="border-b border-gray-200 hover:bg-gray-50">
-                                                <td className="py-3 px-4 text-sm text-gray-800 font-semibold">{caseItem.name}</td>
-                                                <td className="py-3 px-4 text-sm text-gray-600">{caseItem.client || '-'}</td>
-                                                <td className="py-3 px-4 text-sm text-gray-600">{caseItem.assignee || '-'}</td>
-                                                <td className="py-3 px-4 text-sm text-gray-600"><span className={`font-medium ${ caseItem.status === '完了' ? 'text-green-600' : caseItem.status === '進行中' ? 'text-blue-600' : caseItem.status === '確認待ち' ? 'text-yellow-600' : caseItem.status === 'キャンセル' ? 'text-red-600' : 'text-gray-600' }`}>{caseItem.status}</span></td>
-                                                <td className="py-3 px-4 text-sm text-gray-600">{userRole === 'owner' && caseItem.basePrice ? `${caseItem.basePrice.toLocaleString()}円` : '-'}</td>
-                                                <td className="py-3 px-4">
-                                                    {canEdit && <button onClick={() => openEditModal(caseItem)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded-lg shadow-md text-xs">編集</button>}
+                                            <tr key={caseItem.id} className="hover:bg-gray-50">
+                                                <td className="py-4 px-4 align-top">
+                                                  <div className="relative pl-2">
+                                                    <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-indigo-500 rounded-full"></div>
+                                                    <div className="font-semibold text-gray-800">{caseItem.name}</div>
+                                                    {caseItem.createdAt && <div className="text-xs text-gray-500 mt-1">{new Date(caseItem.createdAt.toDate()).toLocaleDateString()}</div>}
+                                                  </div>
+                                                </td>
+                                                <td className="py-4 px-4 align-top">
+                                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusClass(caseItem.status)}`}>{caseItem.status}</span>
+                                                </td>
+                                                <td className="py-4 px-4 text-sm text-center text-gray-600 align-top">{taskCount}</td>
+                                                <td className="py-4 px-4 text-sm text-gray-600 align-top">{userRole === 'owner' && caseItem.basePrice ? `${caseItem.basePrice.toLocaleString()}円` : '-'}</td>
+                                                <td className="py-4 px-4 align-top">
+                                                    {canEdit && <button onClick={() => openEditModal(caseItem)} className="text-indigo-600 hover:text-indigo-800"><EditIcon/></button>}
                                                 </td>
                                             </tr>
                                         );
@@ -930,7 +1031,7 @@
                                 const userRole = caseItem.accessControl?.[userId]?.role;
                                 const canEdit = userRole === 'owner' || userRole === 'editor';
                                 return (
-                                    <div key={caseItem.id} className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200 relative">
+                                    <div key={caseItem.id} className="bg-white p-4 rounded-xl border border-gray-200 relative">
                                         <div className="font-semibold text-gray-800 mb-2">{caseItem.name}</div>
                                         <div className="overflow-visible"><TimelineBar startDate={caseItem.startDate} dueDate={caseItem.dueDate} status={caseItem.status} events={caseItem.events} /></div>
                                         <div className="mt-4 text-right">
@@ -952,7 +1053,7 @@
 
             return (
               <div className="w-full max-w-6xl">
-                  <div className="mb-8 p-6 bg-indigo-50 rounded-xl shadow-md">
+                  <div className="mb-8 p-6 bg-indigo-50 rounded-xl">
                     <h2 className="text-2xl font-semibold text-indigo-700 mb-4">新しい案件を追加</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div className="md:col-span-2">
@@ -1058,7 +1159,7 @@
                     <button onClick={handleAddCase} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">案件を追加</button>
                   </div>
 
-                  <div className="p-6 bg-white rounded-xl shadow-md">
+                  <div className="p-6 bg-white rounded-xl border border-gray-200">
                      <div className="flex justify-between items-center mb-4">
                       <div className="flex items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
